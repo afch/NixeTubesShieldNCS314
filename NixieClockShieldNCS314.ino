@@ -1,13 +1,14 @@
 const String FirmwareVersion="010000";
 //Format                _X.XX__    
 //NIXIE CLOCK SHIELD NCS314 by GRA & AFCH (fominalec@gmail.com)
+//25.09.2016 update to HW ver 1.1
 //25.05.2016
  
 #include <SPI.h>
 #include <Wire.h>
 #include <ClickButton.h>
 #include <Time.h>
-#include <Tone.h>
+#include <Tone.h>d
 #include <EEPROM.h>
 
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
@@ -31,9 +32,8 @@ int menuPosition=0; // 0 - time
                     
 byte blinkMask=B00000000; //bit mask for blinkin digits (1 - blink, 0 - constant light)
 
-//-------------------------0-------1----------2----------3---------4--------5---------6---------7---------8---------9-----
-//byte lowBytesArray[]={B11111110,B11111101,B11111011,B11110111,B11101111,B11011111,B10111111,B01111111,B11111111,B11111111};
-//byte highBytesArray[]={B11111111,B11111111,B11111111,B11111111,B11111111,B11111111,B11111111,B11111111,B11111110,B11111101};
+//                      0      1      2      3      4      5      6      7      8       9
+word SymbolArray[10]={65534, 65533, 65531, 65527, 65519, 65503, 65471, 65407, 65279, 65023};
 
 byte dotPattern=B00000000; //bit mask for separeting dots 
                           //B00000000 - turn off up and down dots 
@@ -195,7 +195,7 @@ void setup()
   //
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  //doTest();
+  doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
@@ -428,28 +428,19 @@ void rotateFireWorks()
 void doIndication()
 {
   
-  //static byte b=B00000001;
-
   static unsigned long lastTimeInterval1Started;
   if ((micros()-lastTimeInterval1Started)<fpsLimit) return;
   //if (menuPosition==TimeIndex) doDotBlink();
   lastTimeInterval1Started=micros();
     
-  digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
+  digitalWrite(LEpin, LOW);    // allow data input (Transparent mode)
    
   /* 
     SPI.transfer((b|dotPattern) & doEditBlink()); // anode
     SPI.transfer(highBytesArray[stringToDisplay.substring(curTube,curTube+1).toInt()]);
     SPI.transfer(lowBytesArray[stringToDisplay.substring(curTube,curTube+1).toInt()]);
   */
-  
-  //                        0                  1                  2                  3                  4                  5                  6                  7                  8                  9
-  //long mass1[10]={B1111111111111110, B1111111111111101, B1111111111111011, B1111111111110111, B1111111111101111, B1111111111011111, B1111111110111111, B1111111101111111, B1111111011111111, B1111110111111111};
-  //long mass2[10]={B1111111111111110, B1111110111111111, B1111111011111111, B1111111101111111, B1111111110111111, B1111111111011111, B1111111111101111, B1111111111110111, B1111111111111011, B1111111111111101}; // used only shiled ver 1.0 //for some hardware bug in wiring
-
-  //                0      1      2      3      4      5      6      7      8       9
-  word mass1[10]={65534, 65533, 65531, 65527, 65519, 65503, 65471, 65407, 65279, 65023};
-  word mass2[10]={65534, 65023, 65279, 65407, 65471, 65503, 65519, 65527, 65531, 65533}; // used only shiled ver 1.0 //for some hardware bug in wiring
+  //word SymbolArray2[10]={65534, 65023, 65279, 65407, 65471, 65503, 65519, 65527, 65531, 65533}; // used only for shiled with HW ver 1.0 //it has hardware bug in wiring
   
   unsigned long long Var64=0;
   unsigned long long tmpVar64=0;
@@ -459,27 +450,27 @@ void doIndication()
   Var64=~Var64;
   tmpVar64=~tmpVar64;
   
-  Var64=Var64&((mass2[digits%10]|doEditBlink(5))<<6);
+  Var64=Var64&((SymbolArray[digits%10]|doEditBlink(5))<<6);
   Var64=Var64<<48;
   digits=digits/10;
   
-  tmpVar64=(mass1[digits%10]|doEditBlink(4))<<6;
+  tmpVar64=(SymbolArray[digits%10]|doEditBlink(4))<<6;
   Var64|=(tmpVar64<<38);
   digits=digits/10;
 
-  tmpVar64=(mass2[digits%10]|doEditBlink(3))<<6;
+  tmpVar64=(SymbolArray[digits%10]|doEditBlink(3))<<6;
   Var64|=(tmpVar64<<28);
   digits=digits/10;
   
-  tmpVar64=(mass1[digits%10]|doEditBlink(2))<<6;
+  tmpVar64=(SymbolArray[digits%10]|doEditBlink(2))<<6;
   Var64|=(tmpVar64<<18);
   digits=digits/10;
   
-  tmpVar64=(mass2[digits%10]|doEditBlink(1))<<6;
+  tmpVar64=(SymbolArray[digits%10]|doEditBlink(1))<<6;
   Var64|=(tmpVar64<<8);
   digits=digits/10;
   
-  tmpVar64=(mass1[digits%10]|doEditBlink(0))<<6>>2;
+  tmpVar64=(SymbolArray[digits%10]|doEditBlink(0))<<6>>2;
   Var64|=tmpVar64;
   
   Var64=(Var64>>4);
@@ -502,7 +493,8 @@ void doIndication()
   SPI.transfer(iTmp);
   iTmp=Var64;
   SPI.transfer(iTmp);
-      
+
+  digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)    
   digitalWrite(LEpin, LOW);     // latching data 
 }
 
@@ -570,8 +562,10 @@ void doTest()
 
   int dlay=500;
   bool test=1;
-  byte strIndex=0;
+  byte strIndex=-1;
   unsigned long startOfTest=millis();
+  while (test)
+  {
   for (int i=0; i<12; i++)
   {
    if ((millis()-startOfTest)>dlay) 
@@ -580,20 +574,63 @@ void doTest()
      strIndex=strIndex+1;
      if (strIndex==10) dlay=3000;
      if (strIndex==12) test=0;
+     
+     stringToDisplay=testStringArray[strIndex];
+     long digits=stringToDisplay.toInt();
    
-     switch (strIndex)
-     {
-       /*
-       case 10: SPI.transfer((b|B01000000)&B11111100);
-       break;
-       case 11: SPI.transfer((b|B01000000)&B11001110);
-       break;
-       */
-       //default: SPI.transfer(b|B11000000);
-       default: stringToDisplay=testStringArray[strIndex];
-     }
+    unsigned long long Var64=0;
+    unsigned long long tmpVar64=0;
+    Var64=~Var64;
+    tmpVar64=~tmpVar64;
+  
+    Var64=Var64&((SymbolArray[digits%10])<<6);
+    Var64=Var64<<48;
+    digits=digits/10;
+  
+    tmpVar64=(SymbolArray[digits%10])<<6;
+    Var64|=(tmpVar64<<38);
+    digits=digits/10;
+
+    tmpVar64=(SymbolArray[digits%10])<<6;
+    Var64|=(tmpVar64<<28);
+    digits=digits/10;
+  
+    tmpVar64=(SymbolArray[digits%10])<<6;
+    Var64|=(tmpVar64<<18);
+    digits=digits/10;
+  
+    tmpVar64=(SymbolArray[digits%10])<<6;
+    Var64|=(tmpVar64<<8);
+    digits=digits/10;
+  
+    tmpVar64=(SymbolArray[digits%10])<<6>>2;
+    Var64|=tmpVar64;
+  
+    Var64=(Var64>>4);
+    
+    unsigned int iTmp=0;
+  
+    digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
+    iTmp=Var64>>56;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>48;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>40;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>32;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>24;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>16;
+    SPI.transfer(iTmp);
+    iTmp=Var64>>8;
+    SPI.transfer(iTmp);
+    iTmp=Var64;
+    SPI.transfer(iTmp);
+      
+    digitalWrite(LEpin, LOW);     // latching data 
    }
-   
+  }
    delayMicroseconds(2000);
   }; 
 
@@ -958,5 +995,6 @@ void checkAlarmTime()
      p=song;
    }
 }
+
 
 
