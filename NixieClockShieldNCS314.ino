@@ -1,14 +1,20 @@
-const String FirmwareVersion="010000";
+const String FirmwareVersion="010200";
 //Format                _X.XX__    
 //NIXIE CLOCK SHIELD NCS314 by GRA & AFCH (fominalec@gmail.com)
+//1.02 17.10.2016
+//Fixed: RGB color controls
+//Update to Arduino IDE 1.6.12 (Time.h replaced to TimeLib.h)
+//1.01
+//Added RGB LEDs lock(by UP and Down Buttons)
+//Added Down and Up buttons pause and resume self testing
 //25.09.2016 update to HW ver 1.1
 //25.05.2016
  
 #include <SPI.h>
 #include <Wire.h>
 #include <ClickButton.h>
-#include <Time.h>
-#include <Tone.h>d
+#include <TimeLib.h>
+#include <Tone.h>
 #include <EEPROM.h>
 
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
@@ -96,7 +102,11 @@ bool RGBLedsOn=true;
 byte RGBLEDsEEPROMAddress=0; 
 byte HourFormatEEPROMAddress=1;
 byte AlarmTimeEEPROMAddress=2;//3,4,5
-byte AlarmArmedEEPROMAddress=6;   
+byte AlarmArmedEEPROMAddress=6;
+byte LEDsLockEEPROMAddress=7;   
+byte LEDsRedValueEEPROMAddress=8; 
+byte LEDsGreenValueEEPROMAddress=9; 
+byte LEDsBlueValueEEPROMAddress=10;   
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -134,6 +144,7 @@ void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
 
 int functionDownButton=0;
 int functionUpButton=0;
+bool LEDsLock=false;
 
 /*******************************************************************************************************
 Init Programm
@@ -146,7 +157,6 @@ void setup()
   //setRTCDateTime(23,40,00,25,7,15,1);
   
   Serial.begin(115200);
-  Serial.println("");
   
     if (EEPROM.read(HourFormatEEPROMAddress)!=12) value[hModeValueIndex]=24; else value[hModeValueIndex]=12;
     if (EEPROM.read(RGBLEDsEEPROMAddress)!=0) RGBLedsOn=true; else RGBLedsOn=false;
@@ -154,17 +164,19 @@ void setup()
     if (EEPROM.read(AlarmTimeEEPROMAddress+1)==255) value[AlarmMinuteIndex]=0; else value[AlarmMinuteIndex]=EEPROM.read(AlarmTimeEEPROMAddress+1);
     if (EEPROM.read(AlarmTimeEEPROMAddress+2)==255) value[AlarmSecondIndex]=0; else value[AlarmSecondIndex]=EEPROM.read(AlarmTimeEEPROMAddress+2);
     if (EEPROM.read(AlarmArmedEEPROMAddress)==255) value[Alarm01]=0; else value[Alarm01]=EEPROM.read(AlarmArmedEEPROMAddress);
+    if (EEPROM.read(LEDsLockEEPROMAddress)==255) LEDsLock=false; else LEDsLock=EEPROM.read(LEDsLockEEPROMAddress);
+    Serial.print("led lock=");
+    Serial.println(LEDsLock);
+    
+  pinMode(RedLedPin, OUTPUT);
+  pinMode(GreenLedPin, OUTPUT);
+  pinMode(BlueLedPin, OUTPUT);
     
   tone1.begin(pinBuzzer);
   song=parseSong(song);
   
   pinMode(LEpin, OUTPUT);
   pinMode(DHVpin, OUTPUT);
-  
-  pinMode(RedLedPin, OUTPUT);
-  pinMode(GreenLedPin, OUTPUT);
-  pinMode(BlueLedPin, OUTPUT);
-  
   
  // SPI setup
 
@@ -193,10 +205,14 @@ void setup()
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
   
   //
-  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
+  //digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  if (LEDsLock==1)
+    {
+      setLEDsFromEEPROM();
+    }
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
   digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
@@ -302,6 +318,11 @@ void loop() {
       p=0; //shut off music )))
       tone1.play(1000,100);
       incrementValue();
+      if (!editMode) 
+        {
+          LEDsLock=false;
+          EEPROM.write(LEDsLockEEPROMAddress, 0);
+        }
     }
   
   if (functionUpButton == -1 && upButton.depressed == true)   
@@ -324,6 +345,14 @@ void loop() {
       p=0; //shut off music )))
       tone1.play(1000,100);
       dicrementValue();
+      if (!editMode) 
+      {
+        LEDsLock=true;
+        EEPROM.write(LEDsLockEEPROMAddress, 1);
+        EEPROM.write(LEDsRedValueEEPROMAddress, RedLight);
+        EEPROM.write(LEDsGreenValueEEPROMAddress, GreenLight);
+        EEPROM.write(LEDsBlueValueEEPROMAddress, BlueLight);
+      }
     }
   
   if (functionDownButton == -1 && downButton.depressed == true)   
@@ -347,6 +376,7 @@ void loop() {
         RGBLedsOn=true;
         EEPROM.write(RGBLEDsEEPROMAddress,1);
         Serial.println("RGB=on");
+        setLEDsFromEEPROM();
       }
     if (downButton.clicks<0)
     {
@@ -409,6 +439,7 @@ void rotateFireWorks()
     analogWrite(BlueLedPin,0); 
     return;
   }
+  if (LEDsLock) return;
   RedLight=RedLight+fireforks[rotator*3];
   GreenLight=GreenLight+fireforks[rotator*3+1];
   BlueLight=BlueLight+fireforks[rotator*3+2];
@@ -564,14 +595,18 @@ void doTest()
   bool test=1;
   byte strIndex=-1;
   unsigned long startOfTest=millis();
+  digitalWrite(DHVpin, HIGH);
+  bool digitsLock=false;
   while (test)
   {
+    if (digitalRead(pinDown)==0) digitsLock=true;
+    if (digitalRead(pinUp)==0) digitsLock=false;
   for (int i=0; i<12; i++)
   {
    if ((millis()-startOfTest)>dlay) 
    {
      startOfTest=millis();
-     strIndex=strIndex+1;
+     if (!digitsLock) strIndex=strIndex+1;
      if (strIndex==10) dlay=3000;
      if (strIndex==12) test=0;
      
@@ -711,7 +746,7 @@ word doEditBlink(int pos)
 {
   if (!BlinkUp) return 0;
   if (!BlinkDown) return 0;
-  
+  //if (pos==5) return 0xFFFF; //need to be deleted for testing purpose only!
   int lowBit=blinkMask>>pos;
   lowBit=lowBit&B00000001;
   
@@ -997,4 +1032,10 @@ void checkAlarmTime()
 }
 
 
+void setLEDsFromEEPROM()
+{
+  digitalWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
+  digitalWrite(GreenLedPin, EEPROM.read(LEDsGreenValueEEPROMAddress));
+  digitalWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));
+}
 
