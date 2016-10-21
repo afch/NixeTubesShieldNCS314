@@ -6,11 +6,11 @@
  * you can send the text on the next line using Serial Monitor to set the clock to noon Jan 1 2013
  T1357041600  
  *
- * A Processing example sketch to automatically send the messages is inclided in the download
+ * A Processing example sketch to automatically send the messages is included in the download
  * On Linux, you can use "date +T%s\n > /dev/ttyACM0" (UTC time zone)
  */ 
  
-#include <Time.h>  
+#include <TimeLib.h>
 
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
