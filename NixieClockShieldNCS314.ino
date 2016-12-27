@@ -1,6 +1,10 @@
-const String FirmwareVersion="010200";
+const String FirmwareVersion="010300";
 //Format                _X.XX__    
 //NIXIE CLOCK SHIELD NCS314 by GRA & AFCH (fominalec@gmail.com)
+//1.03
+//Added ACP
+//Added transitions for displaying temporary information such as date
+//Created globals for time so that reading ms is the same everywhere for one call of loop()
 //1.02 17.10.2016
 //Fixed: RGB color controls
 //Update to Arduino IDE 1.6.12 (Time.h replaced to TimeLib.h)
@@ -18,7 +22,7 @@ const String FirmwareVersion="010200";
 #include <EEPROM.h>
 
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
-const byte DHVpin=5; // off/on MAX1771 Driver  Hight Voltage(DHV) 110-220V 
+const byte DHVpin=5; // off/on MAX1771 Driver  High Voltage(DHV) 110-220V
 const byte RedLedPin=9; //MCU WDM output for red LEDs 9-g
 const byte GreenLedPin=6; //MCU WDM output for green LEDs 6-b
 const byte BlueLedPin=3; //MCU WDM output for blue LEDs 3-r
@@ -30,18 +34,18 @@ const byte pinUpperDots=12; //HIGH value light a dots
 const byte pinLowerDots=8;  //HIGH value light a dots
 const word fpsLimit=16666; // 1/60*1.000.000 //limit maximum refresh rate on 60 fps
 
-String stringToDisplay="000000";// Conten of this string will be displayed on tubes (must be 6 chars length)
+String stringToDisplay="000000";// Content of this string will be displayed on tubes (must be 6 chars length)
 int menuPosition=0; // 0 - time
                     // 1 - date
                     // 2 - alarm
                     // 3 - 12/24 hours mode
                     
-byte blinkMask=B00000000; //bit mask for blinkin digits (1 - blink, 0 - constant light)
+byte blinkMask=B00000000; //bit mask for blinking digits (1 - blink, 0 - constant light)
 
 //                      0      1      2      3      4      5      6      7      8       9
 word SymbolArray[10]={65534, 65533, 65531, 65527, 65519, 65503, 65471, 65407, 65279, 65023};
 
-byte dotPattern=B00000000; //bit mask for separeting dots 
+byte dotPattern=B00000000; //bit mask for separating dots
                           //B00000000 - turn off up and down dots 
                           //B1100000 - turn off all dots
 
@@ -92,6 +96,17 @@ byte blinkPattern[15]={
 
 bool editMode=false;
 
+// If true, blank that digit H,H,M,M,S,S
+byte blanks[6] = {false, false, false, false, false, false};
+// Global ms (so it is the same in all methods called from loop()
+long nowMillis;
+// Global System time for one run of the loop h, m, s, ms (so they are the same in every method called from loop()
+int GLOB_TIME[4] = {0, 0, 0, 0};
+#define HOUR_IDX 0
+#define MIN_IDX 1
+#define SEC_IDX 2
+#define MS_IDX 3
+
 long downTime=0;
 long upTime=0;
 const long settingDelay=150;
@@ -103,7 +118,7 @@ byte RGBLEDsEEPROMAddress=0;
 byte HourFormatEEPROMAddress=1;
 byte AlarmTimeEEPROMAddress=2;//3,4,5
 byte AlarmArmedEEPROMAddress=6;
-byte LEDsLockEEPROMAddress=7;   
+byte LEDsLockEEPROMAddress=7;
 byte LEDsRedValueEEPROMAddress=8; 
 byte LEDsGreenValueEEPROMAddress=9; 
 byte LEDsBlueValueEEPROMAddress=10;   
@@ -116,8 +131,8 @@ ClickButton downButton(pinDown, LOW, CLICKBTN_PULLUP);
 
 Tone tone1;
 #define isdigit(n) (n >= '0' && n <= '9')
-//char *song = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
-char *song = "PinkPanther:d=4,o=5,b=160:8d#,8e,2p,8f#,8g,2p,8d#,8e,16p,8f#,8g,16p,8c6,8b,16p,8d#,8e,16p,8b,2a#,2p,16a,16g,16e,16d,2e";
+char *song = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
+//char *song = "PinkPanther:d=4,o=5,b=160:8d#,8e,2p,8f#,8g,2p,8d#,8e,16p,8f#,8g,16p,8c6,8b,16p,8d#,8e,16p,8b,2a#,2p,16a,16g,16e,16d,2e";
 //char *song="VanessaMae:d=4,o=6,b=70:32c7,32b,16c7,32g,32p,32g,32p,32d#,32p,32d#,32p,32c,32p,32c,32p,32c7,32b,16c7,32g#,32p,32g#,32p,32f,32p,16f,32c,32p,32c,32p,32c7,32b,16c7,32g,32p,32g,32p,32d#,32p,32d#,32p,32c,32p,32c,32p,32g,32f,32d#,32d,32c,32d,32d#,32c,32d#,32f,16g,8p,16d7,32c7,32d7,32a#,32d7,32a,32d7,32g,32d7,32d7,32p,32d7,32p,32d7,32p,16d7,32c7,32d7,32a#,32d7,32a,32d7,32g,32d7,32d7,32p,32d7,32p,32d7,32p,32g,32f,32d#,32d,32c,32d,32d#,32c,32d#,32f,16c";
 //char *song="DasBoot:d=4,o=5,b=100:d#.4,8d4,8c4,8d4,8d#4,8g4,a#.4,8a4,8g4,8a4,8a#4,8d,2f.,p,f.4,8e4,8d4,8e4,8f4,8a4,c.,8b4,8a4,8b4,8c,8e,2g.,2p";
 //char *song="Scatman:d=4,o=5,b=200:8b,16b,32p,8b,16b,32p,8b,2d6,16p,16c#.6,16p.,8d6,16p,16c#6,8b,16p,8f#,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8f#,2p,32p,2d6,16p,16c#6,8p,16d.6,16p.,16c#6,16a.,16p.,8e,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8b,16b,32p,8b,16b,32p,8b,2d6,16p,16c#.6,16p.,8d6,16p,16c#6,8b,16p,8f#,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8f#,2p,32p,2d6,16p,16c#6,8p,16d.6,16p.,16c#6,16a.,16p.,8e,2p.,16c#6,8p,16d.6,16p.,16c#6,16a,8p,8e,2p,32p,16f#.6,16p.,16b.,16p.";
@@ -141,17 +156,207 @@ int fireforks[]={0,0,1,//1
                  0,-1,0}; //array with RGB rules (0 - do nothing, -1 - decrese, +1 - increse
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
+String getTimeString(boolean forceUpdate=false);
+String getDateString();
 
 int functionDownButton=0;
 int functionUpButton=0;
 bool LEDsLock=false;
 
+struct Transition {
+  /**
+   * Default the effect and hold duration.
+   */
+  Transition() : Transition(500, 500, 3000) {
+  }
+
+  Transition(int effectDuration, int holdDuration) : Transition(effectDuration, effectDuration, holdDuration) {
+  }
+
+  Transition(int effectInDuration, int effectOutDuration, int holdDuration) {
+    this->effectInDuration = effectInDuration;
+    this->effectOutDuration = effectOutDuration;
+    this->holdDuration = holdDuration;
+    this->started = 0;
+    this->end = 0;
+  }
+
+  void start(long now) {
+    if (end < now) {
+      this->started = now;
+      this->end = getEnd();
+    }
+    // else we are already running!
+  }
+
+  boolean scrollMsg(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  {
+    if (now < end) {
+      int msCount = now - started;
+      if (msCount < effectInDuration) {
+        loadRegularValues();
+        // Scroll -1 -> -6
+        scroll(-(msCount % effectInDuration) * 6 / effectInDuration - 1);
+      } else if (msCount < effectInDuration * 2) {
+        loadMessageValues();
+        // Scroll 5 -> 0
+        scroll(5 - (msCount % effectInDuration) * 6 / effectInDuration);
+      } else if (msCount < effectInDuration * 2 + holdDuration) {
+        loadMessageValues();
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration) {
+        loadMessageValues();
+        // Scroll 1 -> 6
+        scroll(((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration + 1);
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration * 2) {
+        loadRegularValues();
+        // Scroll 0 -> -5
+        scroll(((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration - 5);
+      }
+
+      return true;  // we are still running
+    }
+
+    return false;   // We aren't running
+  }
+
+  boolean scrambleMsg(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  {
+    if (now < end) {
+      int msCount = now - started;
+      if (msCount < effectInDuration) {
+        loadRegularValues();
+        scramble(msCount, 5 - (msCount % effectInDuration) * 6 / effectInDuration, 6);
+      } else if (msCount < effectInDuration * 2) {
+        loadMessageValues();
+        scramble(msCount, 0, 5 - (msCount % effectInDuration) * 6 / effectInDuration);
+      } else if (msCount < effectInDuration * 2 + holdDuration) {
+        loadMessageValues();
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration) {
+        loadMessageValues();
+        scramble(msCount, 0, ((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration + 1);
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration * 2) {
+        loadRegularValues();
+        scramble(msCount, ((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration + 1, 6);
+      }
+
+      return true;  // we are still running
+    }
+
+    return false;   // We aren't running
+  }
+
+  boolean scrollInScrambleOut(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  {
+    if (now < end) {
+      int msCount = now - started;
+      if (msCount < effectInDuration) {
+        loadRegularValues();
+        scroll(-(msCount % effectInDuration) * 6 / effectInDuration - 1);
+      } else if (msCount < effectInDuration * 2) {
+        loadMessageValues();
+        scroll(5 - (msCount % effectInDuration) * 6 / effectInDuration);
+      } else if (msCount < effectInDuration * 2 + holdDuration) {
+        loadMessageValues();
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration) {
+        loadMessageValues();
+        scramble(msCount, 0, ((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration + 1);
+      } else if (msCount < effectInDuration * 2 + holdDuration + effectOutDuration * 2) {
+        loadRegularValues();
+        scramble(msCount, ((msCount - holdDuration) % effectOutDuration) * 6 / effectOutDuration + 1, 6);
+      }
+
+      return true;  // we are still running
+    }
+
+    return false;   // We aren't running
+  }
+
+  static void loadTime() {
+    stringToDisplay = getTimeString(true);
+  }
+
+  static void loadDate() {
+    stringToDisplay = getDateString();
+  }
+
+  /**
+   * +ve scroll right
+   * -ve scroll left
+   */
+  static int scroll(char count) {
+    String copy = stringToDisplay;
+    char offset = 0;
+    char slope = 1;
+    if (count < 0) {
+      count = -count;
+      offset = 5;
+      slope = -1;
+    }
+    for (char i=0; i<6; i++) {
+      if (i >= count) {
+        stringToDisplay[offset + i * slope] = copy[offset + (i-count) * slope];
+      } else {
+        blanks[offset + i * slope] = true;
+      }
+    }
+
+    return count;
+  }
+
+  static long hash(long x) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+  }
+
+  // In these functions we want something that changes every 100ms,
+  // hence msCount/100. Plus it needs to be different for different
+  // indices, hence +i. Plus it needs to be 'random', hence hash function
+  static int scramble(int msCount, byte start, byte end) {
+    for (int i=start; i < end; i++) {
+      stringToDisplay[i] = '0' + hash(msCount / 100 + i) % 10;
+    }
+
+    return start;
+  }
+
+protected:
+  /**** Don't let Joe Public see this stuff ****/
+
+  int effectInDuration; // How long an effect should take in ms
+  int effectOutDuration; // How long an effect should take in ms
+  int holdDuration;   // How long the message should be displayed for in ms
+  long started;       // When we were started (timestamp)
+  long end;           // When the whole thing will end (timestamp)
+
+  /**
+   * The end time has to match what displayMessage() wants,
+   * so let sub-classes override it.
+   */
+  long getEnd() {
+    return started + effectInDuration * 2 + holdDuration + effectOutDuration * 2;
+  }
+};
+
+Transition transition(500, 1000, 3000);
+
+void setTickGlobals() {
+  nowMillis = millis();
+  GLOB_TIME[HOUR_IDX] = hour();
+  GLOB_TIME[MIN_IDX] = minute();
+  GLOB_TIME[SEC_IDX] = second();
+  GLOB_TIME[MS_IDX] = nowMillis % 1000;
+}
+
 /*******************************************************************************************************
-Init Programm
+Init Program
 *******************************************************************************************************/
 void setup() 
 {
-  digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
+  setTickGlobals();
+
+  digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  High Voltage(DHV) 110-220V
    
   Wire.begin();
   //setRTCDateTime(23,40,00,25,7,15,1);
@@ -215,9 +420,10 @@ void setup()
     }
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
-  digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
-  setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //записываем только что считанное время в RTC чтобы запустить новую микросхему
-  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
+  digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
+  setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //Ð·Ð°Ð¿Ð¸Ñ�Ñ‹Ð²Ð°ÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ñ�Ñ‡Ð¸Ñ‚Ð°Ð½Ð½Ð¾Ðµ Ð²Ñ€ÐµÐ¼Ñ� Ð² RTC Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð¿ÑƒÑ�Ñ‚Ð¸Ñ‚ÑŒ Ð½Ð¾Ð²ÑƒÑŽ Ð¼Ð¸ÐºÑ€Ð¾Ñ�Ñ…ÐµÐ¼Ñƒ
+  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
+  setTickGlobals();
   //p=song;
 }
 
@@ -227,7 +433,7 @@ void rotateLeft(uint8_t &bits)
   bits = (bits << 1) | high_bit;
 }
 
-int rotator=0; //index in array with RGB "rules" (increse by one on each 255 cycles)
+int rotator=0; //index in array with RGB "rules" (increase by one on each 255 cycles)
 int cycle=0; //cycles counter
 int RedLight=255;
 int GreenLight=0;
@@ -240,15 +446,16 @@ unsigned long prevTime4FireWorks=0;  //time of last RGB changed
 MAIN Programm
 ***************************************************************************************************************/
 void loop() {
-  
+  setTickGlobals();
+
   p=playmusic(p);
   
-  if ((millis()-prevTime4FireWorks)>5)
+  if ((nowMillis-prevTime4FireWorks)>5)
   {
     rotateFireWorks(); //change color (by 1 step)
-    prevTime4FireWorks=millis();
+    prevTime4FireWorks=nowMillis;
   }
-    
+
   doIndication();
   
   setButton.Update();
@@ -257,8 +464,7 @@ void loop() {
   if (editMode==false) 
     {
       blinkMask=B00000000;
-      
-    } else if ((millis()-enteringEditModeTime)>60000) 
+    } else if ((nowMillis-enteringEditModeTime)>60000)
     {
       editMode=false;
       menuPosition=firstChild[menuPosition];
@@ -268,7 +474,7 @@ void loop() {
     {
       p=0; //shut off music )))
       tone1.play(1000,100);
-      enteringEditModeTime=millis();
+      enteringEditModeTime=nowMillis;
       menuPosition=menuPosition+1;
       if (menuPosition==hModeIndex+1) menuPosition=TimeIndex;
       Serial.print(F("menuPosition="));
@@ -287,11 +493,11 @@ void loop() {
         editMode=false;
         menuPosition=parent[menuPosition-1]-1;
         if (menuPosition==TimeIndex) setTime(value[TimeHoursIndex], value[TimeMintuesIndex], value[TimeSecondsIndex], day(), month(), year());
-        if (menuPosition==DateIndex) setTime(hour(), minute(), second(),value[DateDayIndex], value[DateMonthIndex], 2000+value[DateYearIndex]);
+        if (menuPosition==DateIndex) setTime(GLOB_TIME[HOUR_IDX], GLOB_TIME[MIN_IDX], GLOB_TIME[SEC_IDX],value[DateDayIndex], value[DateMonthIndex], 2000+value[DateYearIndex]);
         if (menuPosition==AlarmIndex) {EEPROM.write(AlarmTimeEEPROMAddress,value[AlarmHourIndex]); EEPROM.write(AlarmTimeEEPROMAddress+1,value[AlarmMinuteIndex]); EEPROM.write(AlarmTimeEEPROMAddress+2,value[AlarmSecondIndex]); EEPROM.write(AlarmArmedEEPROMAddress, value[Alarm01]);};
         if (menuPosition==hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
         digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
-        setRTCDateTime(hour(),minute(),second(),day(),month(),year()%1000,1);
+        setRTCDateTime(GLOB_TIME[HOUR_IDX],GLOB_TIME[MIN_IDX],GLOB_TIME[SEC_IDX],day(),month(),year()%1000,1);
         digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
       }
       value[menuPosition]=extractDigits(blinkMask);
@@ -301,8 +507,8 @@ void loop() {
       tone1.play(1000,100);
       if (!editMode) 
       {
-        enteringEditModeTime=millis();
-        if (menuPosition==TimeIndex) stringToDisplay=PreZero(hour())+PreZero(minute())+PreZero(second()); //temporary enabled 24 hour format while settings
+        enteringEditModeTime=nowMillis;
+        if (menuPosition==TimeIndex) stringToDisplay=PreZero(GLOB_TIME[HOUR_IDX])+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]); //temporary enabled 24 hour format while settings
       }
       menuPosition=firstChild[menuPosition];
       if (menuPosition==AlarmHourIndex) {value[Alarm01]=1; /*digitalWrite(pinUpperDots, HIGH);*/dotPattern=B10000000;}
@@ -330,9 +536,9 @@ void loop() {
    BlinkUp=false;
    if (editMode==true) 
    {
-     if ( (millis() - upTime) > settingDelay)
+     if ( (nowMillis - upTime) > settingDelay)
     {
-     upTime = millis();// + settingDelay;
+     upTime = nowMillis;// + settingDelay;
       incrementValue();
     }
    }
@@ -345,7 +551,7 @@ void loop() {
       p=0; //shut off music )))
       tone1.play(1000,100);
       dicrementValue();
-      if (!editMode) 
+      if (!editMode)
       {
         LEDsLock=true;
         EEPROM.write(LEDsLockEEPROMAddress, 1);
@@ -360,9 +566,9 @@ void loop() {
    BlinkDown=false;
    if (editMode==true) 
    {
-     if ( (millis() - downTime) > settingDelay)
+     if ( (nowMillis - downTime) > settingDelay)
     {
-     downTime = millis();// + settingDelay;
+     downTime = nowMillis;// + settingDelay;
       dicrementValue();
     }
    }
@@ -392,12 +598,28 @@ void loop() {
   switch (menuPosition)
   {
     case TimeIndex: //time mode
-       stringToDisplay=updateDisplayString();
-       doDotBlink();
-       checkAlarmTime();
+    {
+      clearBlanks();
+
+      if (GLOB_TIME[SEC_IDX] == 50) {
+        transition.start(nowMillis);
+      }
+
+      boolean msgDisplaying = transition.scrollInScrambleOut(nowMillis, Transition::loadTime, Transition::loadDate);
+
+      if (!msgDisplaying) {
+        if ((GLOB_TIME[MIN_IDX] % 10) == 0 && (GLOB_TIME[SEC_IDX] >= 0 && GLOB_TIME[SEC_IDX] <= 10)) {
+          stringToDisplay = oneArmedBandit();
+        } else {
+          stringToDisplay = getTimeString();
+        }
+      }
+      doDotBlink();
+      checkAlarmTime();
+    }
        break;
     case DateIndex: //date mode
-      stringToDisplay=PreZero(day())+PreZero(month())+PreZero(year()%1000);
+      stringToDisplay=getDateString();
       dotPattern=B01000000;//turn on lower dots
       /*digitalWrite(pinUpperDots, LOW);
       digitalWrite(pinLowerDots, HIGH);*/
@@ -455,6 +677,16 @@ void rotateFireWorks()
   if (rotator>5) rotator=0;
 }
 
+String oneArmedBandit() {
+  static long lastTime = 0;
+
+  if (nowMillis - lastTime > 100) {
+    lastTime = nowMillis;
+    return String(random(1000000));
+  }
+
+  return stringToDisplay;
+}
 
 void doIndication()
 {
@@ -536,10 +768,10 @@ byte CheckButtonsState()
   static unsigned long lastTimeButtonsPressed;
   if ((digitalRead(pinSet)==0)||(digitalRead(pinUp)==0)||(digitalRead(pinDown)==0))
   {
-    if (buttonsWasChecked==false) startBuzzTime=millis();
+    if (buttonsWasChecked==false) startBuzzTime=nowMillis;
     buttonsWasChecked=true;
   } else buttonsWasChecked=false;
-  if (millis()-startBuzzTime<30) 
+  if (nowMillis-startBuzzTime<30)
     {
       digitalWrite(pinBuzzer, HIGH);
     } else
@@ -548,19 +780,24 @@ byte CheckButtonsState()
     }
 }
 
-String updateDisplayString()
+String getTimeString(boolean forceUpdate)
 {
-  static  unsigned long lastTimeStringWasUpdated;
-  if ((millis()-lastTimeStringWasUpdated)>1000)
+  static int lastTimeStringWasUpdated = GLOB_TIME[SEC_IDX];
+  if (lastTimeStringWasUpdated != GLOB_TIME[SEC_IDX] || forceUpdate)
   {
     //Serial.println("doDotBlink");
     //doDotBlink();
-    lastTimeStringWasUpdated=millis();
-    if (value[hModeValueIndex]==24) return PreZero(hour())+PreZero(minute())+PreZero(second());
-      else return PreZero(hourFormat12())+PreZero(minute())+PreZero(second());
+    lastTimeStringWasUpdated=GLOB_TIME[SEC_IDX];
+    if (value[hModeValueIndex]==24) return PreZero(GLOB_TIME[HOUR_IDX])+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]);
+      else return PreZero(hourFormat12(nowMillis))+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]);
     
   }
   return stringToDisplay;
+}
+
+String getDateString()
+{
+  return PreZero(day())+PreZero(month())+PreZero(year()%1000);
 }
 
 void doTest()
@@ -675,11 +912,12 @@ void doTest()
 
 void doDotBlink()
 {
-  static unsigned long lastTimeBlink=millis();
+  static unsigned long lastTimeBlink=GLOB_TIME[SEC_IDX];
   static bool dotState=0;
-  if ((millis()-lastTimeBlink)>1000) 
+
+  if (lastTimeBlink != GLOB_TIME[SEC_IDX])
   {
-    lastTimeBlink=millis();
+    lastTimeBlink=GLOB_TIME[SEC_IDX];;
     dotState=!dotState;
     if (dotState) 
       {
@@ -742,21 +980,31 @@ void getRTCTime()
   RTC_year = bcdToDec(Wire.read());
 }
 
+void clearBlanks() {
+  for (int i=0; i<6; i++) {
+    blanks[i] = false;
+  }
+}
+
 word doEditBlink(int pos)
 {
+  if (blanks[pos]) {
+    return 0xFFFF;
+  }
+
   if (!BlinkUp) return 0;
   if (!BlinkDown) return 0;
   //if (pos==5) return 0xFFFF; //need to be deleted for testing purpose only!
   int lowBit=blinkMask>>pos;
   lowBit=lowBit&B00000001;
   
-  static unsigned long lastTimeEditBlink=millis();
+  static unsigned long lastTimeEditBlink=nowMillis;
   static bool blinkState=false;
   word mask=0;
   static int tmp=0;//blinkMask;
-  if ((millis()-lastTimeEditBlink)>300) 
+  if ((nowMillis-lastTimeEditBlink)>300)
   {
-    lastTimeEditBlink=millis();
+    lastTimeEditBlink=nowMillis;
     blinkState=!blinkState;
     /*Serial.print("blinkpattern= ");
     Serial.println(blinkPattern[menuPosition]);
@@ -888,8 +1136,8 @@ char* parseSong(char *p)
       {
         return p;
       }
-    if (millis()-lastTimeNotePlaying>duration) 
-        lastTimeNotePlaying=millis();
+    if (nowMillis-lastTimeNotePlaying>duration)
+        lastTimeNotePlaying=nowMillis;
       else return p;
     // first, get note duration, if available
     num = 0;
@@ -968,8 +1216,8 @@ char* parseSong(char *p)
     if(note)
     {
       tone1.play(notes[(scale - 4) * 12 + note], duration);
-      if (millis()-lastTimeNotePlaying>duration) 
-        lastTimeNotePlaying=millis();
+      if (nowMillis-lastTimeNotePlaying>duration)
+        lastTimeNotePlaying=nowMillis;
       else return p;
         tone1.stop();
     }
@@ -984,7 +1232,7 @@ char* parseSong(char *p)
   
 void incrementValue()
   {
-   enteringEditModeTime=millis();
+   enteringEditModeTime=nowMillis;
       if (editMode==true)
       {
        if(menuPosition!=hModeValueIndex) // 12/24 hour mode menu position
@@ -1001,7 +1249,7 @@ void incrementValue()
   
 void dicrementValue()
 {
-      enteringEditModeTime=millis();
+      enteringEditModeTime=nowMillis;
       if (editMode==true)
       {
         if (menuPosition!=hModeValueIndex) value[menuPosition]=value[menuPosition]-1; else value[menuPosition]=value[menuPosition]-12;
@@ -1020,11 +1268,11 @@ unsigned long lastTimeAlarmTriggired=0;
 void checkAlarmTime()
 {
  if (value[Alarm01]==0) return;
- if ((Alarm1SecondBlock==true) && ((millis()-lastTimeAlarmTriggired)>1000)) Alarm1SecondBlock=false; 
+ if ((Alarm1SecondBlock==true) && ((nowMillis-lastTimeAlarmTriggired)>1000)) Alarm1SecondBlock=false;
  if (Alarm1SecondBlock==true) return;
- if ((hour()==value[AlarmHourIndex]) && (minute()==value[AlarmMinuteIndex]) && (second()==value[AlarmSecondIndex]))
+ if ((GLOB_TIME[HOUR_IDX]==value[AlarmHourIndex]) && (GLOB_TIME[MIN_IDX]==value[AlarmMinuteIndex]) && (GLOB_TIME[SEC_IDX]==value[AlarmSecondIndex]))
    {
-     lastTimeAlarmTriggired=millis();
+     lastTimeAlarmTriggired=nowMillis;
      Alarm1SecondBlock=true;
      Serial.println(F("Wake up, Neo!"));
      p=song;
