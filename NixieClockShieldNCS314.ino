@@ -71,50 +71,53 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define AlarmMinuteIndex 12
 #define AlarmSecondIndex 13
 #define AlarmArmedIndex  14
-#define hModeValueIndex  15
-#define DigitsOnIndex    16
-#define DigitsOffIndex   17
+#define LeadingZeroIndex 15
+#define hModeValueIndex  16
+#define DigitsOnIndex    17
+#define DigitsOffIndex   18
 
 #define FirstParent      TimeIndex
 #define LastParent       BlankingIndex
+#define SettingsCount    (DigitsOffIndex+1)
 #define NoParent         0
 
-//--    ------------------0---------------1--------------2---------------3--------------4-------------5-----------6----------7-----------8-----------9-----------10-----------11-----------12-----------13-----------14----------15-----------16---------------17
-//         names:       Time,           Date,          Alarm,          12/24          Blanking      hours,     minutes,   seconds,      day,        month,      year,       hour,       minute,      second       alarm01    hour_format    on hour          off hour
-//                        1               1              1               1              1             1           1          1           1           1            1            1            1            1            1           1
-byte parent[18]=    {   NoParent,       NoParent,      NoParent,       NoParent,     NoParent,    TimeIndex+1,TimeIndex+1,TimeIndex+1,DateIndex+1,DateIndex+1,DateIndex+1,AlarmIndex+1,AlarmIndex+1,AlarmIndex+1,AlarmIndex+1,hModeIndex+1,BlankingIndex+1,BlankingIndex+1};
-byte firstChild[18]={TimeHoursIndex,  DateDayIndex, AlarmHourIndex, hModeValueIndex,DigitsOnIndex,     0,        0,          0,           0,          0,          0,           0,           0,           0,           0,           0,           0,               0};
-byte lastChild[18]= {TimeSecondsIndex,DateYearIndex,AlarmArmedIndex,hModeValueIndex,DigitsOffIndex,    0,        0,          0,           0,          0,          0,           0,           0,           0,           0,           0,           0,               0};
-byte value[18]=     {      0,              0,             0,              0,             0,            0,        0,          0,           0,          0,          0,           0,           0,           0,           0,          24,           0,               0};
-byte maxValue[18]=  {      0,              0,             0,              0,             0,           23,       59,         59,          31,         12,         99,          23,          59,          59,           1,          24,          23,              23};
-byte minValue[18]=  {      0,              0,             0,             12,             0,           00,       00,         00,           1,          1,         00,          00,          00,          00,           0,          12,           0,               0};
-byte blinkPattern[18]={
-                      B00000000,
-                                     B00000000,
-                                                      B00000000,
-                                                                     B00000000,
-                                                                                   B00000000,
-                                                                                                  B00000011,
-                                                                                                            B00001100,
-                                                                                                                        B00110000,
-                                                                                                                                    B00000011,
-                                                                                                                                                 B00001100,
-                                                                                                                                                           B00110000,
-                                                                                                                                                                        B00000011,
-                                                                                                                                                                                     B00001100,
-                                                                                                                                                                                                    B00110000,
-                                                                                                                                                                                                                B11000000,
-                                                                                                                                                                                                                            B00001100,
-                                                                                                                                                                                                                                            B00000011,
-                                                                                                                                                                                                                                                             B00110000};
+//-------------------------------------0---------------1--------------2---------------3--------------4-------------5-----------6----------7-----------8-----------9-----------10-----------11-----------12-----------13-----------14----------15-----------16------------17--------------18
+//         names:                    Time,           Date,          Alarm,          12/24          Blanking      hours,     minutes,   seconds,      day,        month,      year,        hour,       minute,      second       alarm01    leading_zero hour_format    on hour         off hour
+//                                     1               1              1               1              1             1           1          1           1           1            1            1            1            1            1           1            1             1               1
+byte parent[SettingsCount]=    {   NoParent,       NoParent,      NoParent,       NoParent,     NoParent,    TimeIndex+1,TimeIndex+1,TimeIndex+1,DateIndex+1,DateIndex+1,DateIndex+1,AlarmIndex+1,AlarmIndex+1,AlarmIndex+1,AlarmIndex+1,hModeIndex+1,hModeIndex+1,BlankingIndex+1,BlankingIndex+1};
+byte firstChild[SettingsCount]={TimeHoursIndex,  DateDayIndex, AlarmHourIndex,LeadingZeroIndex,DigitsOnIndex,      0,          0,         0,          0,          0,           0,           0,           0,           0,           0,          0,           0,            0,              0};
+byte lastChild[SettingsCount]= {TimeSecondsIndex,DateYearIndex,AlarmArmedIndex,hModeValueIndex,DigitsOffIndex,     0,          0,         0,          0,          0,           0,           0,           0,           0,           0,          0,           0,            0,              0};
+char value[SettingsCount]=     {       0,              0,             0,              0,             0,            0,          0,         0,          0,          0,           0,           0,           0,           0,           0,          0,          24,            0,              0};
+byte maxValue[SettingsCount]=  {       0,              0,             0,              0,             0,           23,         59,        59,         31,         12,          99,          23,          59,          59,           1,          1,          24,           23,             23};
+byte minValue[SettingsCount]=  {       0,              0,             0,             12,             0,           00,         00,        00,          1,          1,          00,          00,          00,          00,           0,          0,          12,            0,              0};
+byte blinkPattern[SettingsCount]={
+                                  B00000000,
+                                                 B00000000,
+                                                                  B00000000,
+                                                                                 B00000000,
+                                                                                               B00000000,
+                                                                                                              B00000011,
+                                                                                                                        B00001100,
+                                                                                                                                    B00110000,
+                                                                                                                                                B00000011,
+                                                                                                                                                             B00001100,
+                                                                                                                                                                       B00110000,
+                                                                                                                                                                                    B00000011,
+                                                                                                                                                                                                 B00001100,
+                                                                                                                                                                                                                B00110000,
+                                                                                                                                                                                                                            B11000000,
+                                                                                                                                                                                                                                         B00000011,
+                                                                                                                                                                                                                                                        B00001100,
+                                                                                                                                                                                                                                                                    B00000011,
+                                                                                                                                                                                                                                                                                     B00110000};
 bool editMode=false;
 
 // If true, blank that digit H,H,M,M,S,S
 byte blanks[6] = {false, false, false, false, false, false};
 // Global ms (so it is the same in all methods called from loop()
-long nowMillis;
+unsigned long nowMillis;
 // Global System time for one run of the loop h, m, s, ms (so they are the same in every method called from loop()
-int GLOB_TIME[4] = {0, 0, 0, 0};
+unsigned int GLOB_TIME[4] = {0, 0, 0, 0};
 #define HOUR_IDX 0
 #define MIN_IDX 1
 #define SEC_IDX 2
@@ -137,6 +140,7 @@ byte LEDsGreenValueEEPROMAddress=9;
 byte LEDsBlueValueEEPROMAddress=10;   
 byte DigitsOnEEPROMAddress=11;
 byte DigitsOffEEPROMAddress=12;
+byte LeadingZeroEEPROMAddress=13;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -163,7 +167,7 @@ NOTE_C6, NOTE_CS6, NOTE_D6, NOTE_DS6, NOTE_E6, NOTE_F6, NOTE_FS6, NOTE_G6, NOTE_
 NOTE_C7, NOTE_CS7, NOTE_D7, NOTE_DS7, NOTE_E7, NOTE_F7, NOTE_FS7, NOTE_G7, NOTE_GS7, NOTE_A7, NOTE_AS7, NOTE_B7
 };
 
-byte fireforks[]={0,0,1,//1
+char fireforks[]={0,0,1,//1
                 -1,0,0,//2
                  0,1,0,//3
                  0,0,-1,//4
@@ -309,10 +313,9 @@ struct Transition {
       slope = -1;
     }
     for (char i=0; i<6; i++) {
+      blanks[offset + i * slope] = i < count;
       if (i >= count) {
         stringToDisplay[offset + i * slope] = copy[offset + (i-count) * slope];
-      } else {
-        blanks[offset + i * slope] = true;
       }
     }
 
@@ -380,6 +383,7 @@ void setup()
   Serial.begin(115200);
   
     if (EEPROM.read(HourFormatEEPROMAddress)!=12) value[hModeValueIndex]=24; else value[hModeValueIndex]=12;
+    if (EEPROM.read(LeadingZeroEEPROMAddress)==255) value[LeadingZeroIndex]=1; else value[LeadingZeroIndex]=EEPROM.read(LeadingZeroEEPROMAddress) % 2;
     if (EEPROM.read(RGBLEDsEEPROMAddress)!=0) RGBLedsOn=true; else RGBLedsOn=false;
     if (EEPROM.read(AlarmTimeEEPROMAddress)==255) value[AlarmHourIndex]=0; else value[AlarmHourIndex]=EEPROM.read(AlarmTimeEEPROMAddress);
     if (EEPROM.read(AlarmTimeEEPROMAddress+1)==255) value[AlarmMinuteIndex]=0; else value[AlarmMinuteIndex]=EEPROM.read(AlarmTimeEEPROMAddress+1);
@@ -476,6 +480,8 @@ void loop() {
 
   doIndication();
   
+  clearBlanks(false);
+
   setButton.Update();
   upButton.Update();
   downButton.Update();
@@ -490,54 +496,61 @@ void loop() {
     }
   if (setButton.clicks>0) //short click, advance menu position by 1
     {
-      checkDisplay(true);
-      p=0; //shut off music )))
-      tone1.play(1000,100);
-      enteringEditModeTime=nowMillis;
-      menuPosition=menuPosition+1;
-      if (menuPosition==LastParent+1) menuPosition=FirstParent;
-      Serial.print(F("menuPosition="));
-      Serial.println(menuPosition);
-      Serial.print(F("value="));
-      Serial.println(value[menuPosition]);
+      if (digitalRead(DHVpin) == LOW) {
+        // If display is turned off, just turn it back on again
+        checkDisplay(true);
+      } else {
+        // Otherwise reset temp timer (just in case) and advance menu
+        checkDisplay(true);
+        p=0; //shut off music )))
+        tone1.play(1000,100);
+        enteringEditModeTime=nowMillis;
+        menuPosition=menuPosition+1;
+        if (menuPosition==LastParent+1) menuPosition=FirstParent;
+        Serial.print(F("menuPosition="));
+        Serial.println(menuPosition);
+        Serial.print(F("value="));
+        Serial.println(value[menuPosition]);
 
-      blinkMask=blinkPattern[menuPosition];
-      if ((parent[menuPosition-1]!=NoParent) and (lastChild[parent[menuPosition-1]-1]==(menuPosition-1)))
-      {
-      // Exiting child menu
-        if ((parent[menuPosition-1]-1==DateIndex) && (!isValidDate()))
-          {
-            menuPosition=DateDayIndex;
-            return;
+        blinkMask=blinkPattern[menuPosition];
+        if ((parent[menuPosition-1]!=NoParent) and (lastChild[parent[menuPosition-1]-1]==(menuPosition-1)))
+        {
+        // Exiting child menu
+          if ((parent[menuPosition-1]-1==DateIndex) && (!isValidDate()))
+            {
+              menuPosition=DateDayIndex;
+              return;
+            }
+          editMode=false;
+          menuPosition=parent[menuPosition-1]-1;
+          switch (menuPosition) {
+          case TimeIndex:
+            setTime(value[TimeHoursIndex], value[TimeMintuesIndex], value[TimeSecondsIndex], day(), month(), year());
+            break;
+          case DateIndex:
+            setTime(GLOB_TIME[HOUR_IDX], GLOB_TIME[MIN_IDX], GLOB_TIME[SEC_IDX],value[DateDayIndex], value[DateMonthIndex], 2000+value[DateYearIndex]);
+            break;
+          case AlarmIndex:
+            EEPROM.write(AlarmTimeEEPROMAddress,  value[AlarmHourIndex]);
+            EEPROM.write(AlarmTimeEEPROMAddress+1,value[AlarmMinuteIndex]);
+            EEPROM.write(AlarmTimeEEPROMAddress+2,value[AlarmSecondIndex]);
+            EEPROM.write(AlarmArmedEEPROMAddress, value[AlarmArmedIndex]);
+            break;
+          case hModeIndex:
+            EEPROM.write(LeadingZeroEEPROMAddress,value[LeadingZeroIndex]);
+            EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
+            break;
+          case BlankingIndex:
+            EEPROM.write(DigitsOnEEPROMAddress,  value[DigitsOnIndex]);
+            EEPROM.write(DigitsOffEEPROMAddress, value[DigitsOffIndex]);
+            break;
           }
-        editMode=false;
-        menuPosition=parent[menuPosition-1]-1;
-        switch (menuPosition) {
-        case TimeIndex:
-          setTime(value[TimeHoursIndex], value[TimeMintuesIndex], value[TimeSecondsIndex], day(), month(), year());
-          break;
-        case DateIndex:
-          setTime(GLOB_TIME[HOUR_IDX], GLOB_TIME[MIN_IDX], GLOB_TIME[SEC_IDX],value[DateDayIndex], value[DateMonthIndex], 2000+value[DateYearIndex]);
-          break;
-        case AlarmIndex:
-          EEPROM.write(AlarmTimeEEPROMAddress,  value[AlarmHourIndex]);
-          EEPROM.write(AlarmTimeEEPROMAddress+1,value[AlarmMinuteIndex]);
-          EEPROM.write(AlarmTimeEEPROMAddress+2,value[AlarmSecondIndex]);
-          EEPROM.write(AlarmArmedEEPROMAddress, value[AlarmArmedIndex]);
-          break;
-        case hModeIndex:
-          EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
-          break;
-        case BlankingIndex:
-          EEPROM.write(DigitsOnEEPROMAddress,  value[DigitsOnIndex]);
-          EEPROM.write(DigitsOffEEPROMAddress, value[DigitsOffIndex]);
-          break;
+          digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
+          setRTCDateTime(hour(),minute(),second(),day(),month(),year()%1000,1);
+          digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
         }
-        digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
-        setRTCDateTime(GLOB_TIME[HOUR_IDX],GLOB_TIME[MIN_IDX],GLOB_TIME[SEC_IDX],day(),month(),year()%1000,1);
-        digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
+        value[menuPosition]=extractDigits(blinkMask);
       }
-      value[menuPosition]=extractDigits(blinkMask);
     }
   if (setButton.clicks<0) //long click, toggle edit mode for that menu position
     {
@@ -639,7 +652,6 @@ void loop() {
       if (!checkDisplay()) {
     	  break;
       }
-      clearBlanks();
 
       if (GLOB_TIME[SEC_IDX] == 50) {
         transition.start(nowMillis);
@@ -652,6 +664,7 @@ void loop() {
           stringToDisplay = oneArmedBandit();
         } else {
           stringToDisplay = getTimeString();
+          clearBlanks(true);
         }
       }
       doDotBlink();
@@ -676,7 +689,7 @@ void loop() {
       checkAlarmTime();
       break;
     case hModeIndex: //12/24 hours mode
-      stringToDisplay="00"+String(value[hModeValueIndex])+"00";
+      stringToDisplay=PreZero(value[LeadingZeroIndex])+PreZero(value[hModeValueIndex])+"00";
       dotPattern=B00000000;//turn off all dots
       /*digitalWrite(pinUpperDots, LOW);
       digitalWrite(pinLowerDots, LOW);*/
@@ -811,7 +824,6 @@ byte CheckButtonsState()
 {
   static boolean buttonsWasChecked;
   static unsigned long startBuzzTime;
-  static unsigned long lastTimeButtonsPressed;
   if ((digitalRead(pinSet)==0)||(digitalRead(pinUp)==0)||(digitalRead(pinDown)==0))
   {
     if (buttonsWasChecked==false) startBuzzTime=nowMillis;
@@ -828,7 +840,7 @@ byte CheckButtonsState()
 
 String getTimeString(boolean forceUpdate)
 {
-  static int lastTimeStringWasUpdated = GLOB_TIME[SEC_IDX];
+  static unsigned int lastTimeStringWasUpdated = GLOB_TIME[SEC_IDX];
   if (lastTimeStringWasUpdated != GLOB_TIME[SEC_IDX] || forceUpdate)
   {
     //Serial.println("doDotBlink");
@@ -874,7 +886,7 @@ void doTest()
   if (Uinput<10) testStringArray[10]="000"+String(int(Uinput*100)); else testStringArray[10]="00"+String(int(Uinput*100));
   testStringArray[11]=FirmwareVersion;
 
-  int dlay=500;
+  unsigned int dlay=500;
   bool test=1;
   byte strIndex=-1;
   unsigned long startOfTest=millis();
@@ -1026,9 +1038,13 @@ void getRTCTime()
   RTC_year = bcdToDec(Wire.read());
 }
 
-void clearBlanks() {
+void clearBlanks(boolean timeDisplay) {
   for (int i=0; i<6; i++) {
     blanks[i] = false;
+  }
+
+  if (timeDisplay && stringToDisplay.charAt(0) == '0' && value[LeadingZeroIndex] == 0) {
+    blanks[0] = true;
   }
 }
 
@@ -1062,9 +1078,9 @@ word doEditBlink(int pos)
     if (blinkState) tmp= 0;
       else tmp=blinkMask;
   }
-  if (((dotPattern&~tmp)>>6)&1==1) digitalWrite(pinLowerDots, HIGH);
+  if ((((dotPattern&~tmp)>>6)&1)==1) digitalWrite(pinLowerDots, HIGH);
       else digitalWrite(pinLowerDots, LOW);
-  if (((dotPattern&~tmp)>>7)&1==1) digitalWrite(pinUpperDots, HIGH);
+  if ((((dotPattern&~tmp)>>7)&1)==1) digitalWrite(pinUpperDots, HIGH);
       else digitalWrite(pinUpperDots, LOW);
       
   if ((blinkState==true) && (lowBit==1)) mask=0xFFFF;//mask=B11111111;
@@ -1122,7 +1138,7 @@ byte default_oct = 6;
 int bpm = 63;
 int num;
 long wholenote;
-long duration;
+unsigned long duration;
 byte note;
 byte scale;
 char* parseSong(char *p)
@@ -1325,7 +1341,7 @@ void checkAlarmTime()
    }
 }
 
-long displayOverrideStart = 0;
+unsigned long displayOverrideStart = 0;
 
 boolean checkDisplay(boolean override) {
 	if (override) {
