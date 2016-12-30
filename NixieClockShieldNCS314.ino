@@ -1,6 +1,9 @@
-const String FirmwareVersion="010400";
+const String FirmwareVersion="010500";
 //Format                _X.XX__    
 //NIXIE CLOCK SHIELD NCS314 by GRA & AFCH (fominalec@gmail.com)
+//1.05
+//Fixed bug with blanking algorithm
+//Re-implemented color rotation - blue LED wasn't cycling because of conflict with tone library.
 //1.04
 //Added display blanking setting (actually display on setting)
 //Fixed problem with stopping music
@@ -16,19 +19,24 @@ const String FirmwareVersion="010400";
 //Added Down and Up buttons pause and resume self testing
 //25.09.2016 update to HW ver 1.1
 //25.05.2016
- 
+
+//#define PLOT_LEDS
+#define INCLUDE_TONES
+
 #include <SPI.h>
 #include <Wire.h>
 #include <ClickButton.h>
 #include <TimeLib.h>
+#ifdef INCLUDE_TONES
 #include <Tone.h>
+#endif
 #include <EEPROM.h>
 
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
 const byte DHVpin=5; // off/on MAX1771 Driver  High Voltage(DHV) 110-220V
-const byte RedLedPin=9; //MCU WDM output for red LEDs 9-g
-const byte GreenLedPin=6; //MCU WDM output for green LEDs 6-b
-const byte BlueLedPin=3; //MCU WDM output for blue LEDs 3-r
+const byte RedLedPin=9; //MCU WDM output for red LEDs 9-g, timer 1, phase correct 490.2hz.
+const byte GreenLedPin=6; //MCU WDM output for green LEDs 6-b, timer 0, fast PWM 976hz. Also runs millis() and delay() so leave this alone!
+const byte BlueLedPin=3; //MCU WDM output for blue LEDs 3-r, timer 2 - tone library, phase correct 490.2hz
 const byte pinSet=A0;
 const byte pinUp=A2;
 const byte pinDown=A1;
@@ -147,28 +155,26 @@ byte HourFormatEEPROMAddress=1;
 byte AlarmTimeEEPROMAddress=2;//3,4,5
 byte AlarmArmedEEPROMAddress=6;
 byte LEDsLockEEPROMAddress=7;
-byte LEDsRedValueEEPROMAddress=8; 
-byte LEDsGreenValueEEPROMAddress=9; 
-byte LEDsBlueValueEEPROMAddress=10;   
 byte DigitsOnEEPROMAddress=11;
 byte DigitsOffEEPROMAddress=12;
 byte LeadingZeroEEPROMAddress=13;
 byte DateFormatEEPROMAddress=14;
+byte HueEEPROMAddress=8;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
 ClickButton upButton(pinUp, LOW, CLICKBTN_PULLUP);
 ClickButton downButton(pinDown, LOW, CLICKBTN_PULLUP);
 ///////////////////
-
+#ifdef INCLUDE_TONES
 Tone tone1;
 #define isdigit(n) (n >= '0' && n <= '9')
-char *song = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
+//char *song = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
 //char *song = "PinkPanther:d=4,o=5,b=160:8d#,8e,2p,8f#,8g,2p,8d#,8e,16p,8f#,8g,16p,8c6,8b,16p,8d#,8e,16p,8b,2a#,2p,16a,16g,16e,16d,2e";
 //char *song="VanessaMae:d=4,o=6,b=70:32c7,32b,16c7,32g,32p,32g,32p,32d#,32p,32d#,32p,32c,32p,32c,32p,32c7,32b,16c7,32g#,32p,32g#,32p,32f,32p,16f,32c,32p,32c,32p,32c7,32b,16c7,32g,32p,32g,32p,32d#,32p,32d#,32p,32c,32p,32c,32p,32g,32f,32d#,32d,32c,32d,32d#,32c,32d#,32f,16g,8p,16d7,32c7,32d7,32a#,32d7,32a,32d7,32g,32d7,32d7,32p,32d7,32p,32d7,32p,16d7,32c7,32d7,32a#,32d7,32a,32d7,32g,32d7,32d7,32p,32d7,32p,32d7,32p,32g,32f,32d#,32d,32c,32d,32d#,32c,32d#,32f,16c";
 //char *song="DasBoot:d=4,o=5,b=100:d#.4,8d4,8c4,8d4,8d#4,8g4,a#.4,8a4,8g4,8a4,8a#4,8d,2f.,p,f.4,8e4,8d4,8e4,8f4,8a4,c.,8b4,8a4,8b4,8c,8e,2g.,2p";
 //char *song="Scatman:d=4,o=5,b=200:8b,16b,32p,8b,16b,32p,8b,2d6,16p,16c#.6,16p.,8d6,16p,16c#6,8b,16p,8f#,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8f#,2p,32p,2d6,16p,16c#6,8p,16d.6,16p.,16c#6,16a.,16p.,8e,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8b,16b,32p,8b,16b,32p,8b,2d6,16p,16c#.6,16p.,8d6,16p,16c#6,8b,16p,8f#,2p.,16c#6,8p,16d.6,16p.,16c#6,16b,8p,8f#,2p,32p,2d6,16p,16c#6,8p,16d.6,16p.,16c#6,16a.,16p.,8e,2p.,16c#6,8p,16d.6,16p.,16c#6,16a,8p,8e,2p,32p,16f#.6,16p.,16b.,16p.";
-//char *song="Popcorn:d=4,o=5,b=160:8c6,8a#,8c6,8g,8d#,8g,c,8c6,8a#,8c6,8g,8d#,8g,c,8c6,8d6,8d#6,16c6,8d#6,16c6,8d#6,8d6,16a#,8d6,16a#,8d6,8c6,8a#,8g,8a#,c6";
+char *song="Popcorn:d=4,o=5,b=160:8c6,8a#,8c6,8g,8d#,8g,c,8c6,8a#,8c6,8g,8d#,8g,c,8c6,8d6,8d#6,16c6,8d#6,16c6,8d#6,8d6,16a#,8d6,16a#,8d6,8c6,8a#,8g,8a#,c6";
 //char *song="WeWishYou:d=4,o=5,b=200:d,g,8g,8a,8g,8f#,e,e,e,a,8a,8b,8a,8g,f#,d,d,b,8b,8c6,8b,8a,g,e,d,e,a,f#,2g,d,g,8g,8a,8g,8f#,e,e,e,a,8a,8b,8a,8g,f#,d,d,b,8b,8c6,8b,8a,g,e,d,e,a,f#,1g,d,g,g,g,2f#,f#,g,f#,e,2d,a,b,8a,8a,8g,8g,d6,d,d,e,a,f#,2g";
 #define OCTAVE_OFFSET 0
 char *p;
@@ -179,13 +185,7 @@ NOTE_C5, NOTE_CS5, NOTE_D5, NOTE_DS5, NOTE_E5, NOTE_F5, NOTE_FS5, NOTE_G5, NOTE_
 NOTE_C6, NOTE_CS6, NOTE_D6, NOTE_DS6, NOTE_E6, NOTE_F6, NOTE_FS6, NOTE_G6, NOTE_GS6, NOTE_A6, NOTE_AS6, NOTE_B6,
 NOTE_C7, NOTE_CS7, NOTE_D7, NOTE_DS7, NOTE_E7, NOTE_F7, NOTE_FS7, NOTE_G7, NOTE_GS7, NOTE_A7, NOTE_AS7, NOTE_B7
 };
-
-char fireforks[]={0,0,1,//1
-                -1,0,0,//2
-                 0,1,0,//3
-                 0,0,-1,//4
-                 1,0,0,//5
-                 0,-1,0}; //array with RGB rules (0 - do nothing, -1 - decrese, +1 - increse
+#endif
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
 boolean checkDisplay(boolean override=false);
@@ -412,10 +412,10 @@ void setup()
   pinMode(RedLedPin, OUTPUT);
   pinMode(GreenLedPin, OUTPUT);
   pinMode(BlueLedPin, OUTPUT);
-    
+#ifdef INCLUDE_TONES
   tone1.begin(pinBuzzer);
   song=parseSong(song);
-  
+#endif
   pinMode(LEpin, OUTPUT);
   pinMode(DHVpin, OUTPUT);
   
@@ -452,7 +452,7 @@ void setup()
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if (LEDsLock==1)
     {
-      setLEDsFromEEPROM();
+      setHueFromEEPROM();
     }
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
@@ -469,8 +469,8 @@ void rotateLeft(uint8_t &bits)
   bits = (bits << 1) | high_bit;
 }
 
-byte rotator=0; //index in array with RGB "rules" (increase by one on each 255 cycles)
-byte cycle=0; //cycles counter
+#define LED_UPDATE_FREQ 100 // Update LEDs at most every LED_UPDATE_FREQ ms
+byte hue=0;
 byte RedLight=255;
 byte GreenLight=0;
 byte BlueLight=0;
@@ -483,14 +483,11 @@ MAIN Programm
 ***************************************************************************************************************/
 void loop() {
   setTickGlobals();
-
+#ifdef INCLUDE_TONES
+  disableTimer();
   p=playmusic(p);
-  
-  if ((nowMillis-prevTime4FireWorks)>5)
-  {
-    rotateFireWorks(); //change color (by 1 step)
-    prevTime4FireWorks=nowMillis;
-  }
+#endif
+  rotateFireWorks(); //change color (by 1 step)
 
   doIndication();
   
@@ -516,8 +513,10 @@ void loop() {
       } else {
         // Otherwise reset temp timer (just in case) and advance menu
         checkDisplay(true);
+#ifdef INCLUDE_TONES
         p=0; //shut off music )))
-        tone1.play(1000,100);
+        playTone(1000,100);
+#endif
         enteringEditModeTime=nowMillis;
         menuPosition=menuPosition+1;
         if (menuPosition==LastParent+1) menuPosition=FirstParent;
@@ -569,7 +568,9 @@ void loop() {
     }
   if (setButton.clicks<0) //long click, toggle edit mode for that menu position
     {
-      tone1.play(1000,100);
+#ifdef INCLUDE_TONES
+    playTone(1000,100);
+#endif
       editMode=!editMode;
       if (editMode)
       {
@@ -586,14 +587,16 @@ void loop() {
    
   if (upButton.clicks>0) 
     {
-      p=0; //shut off music )))
-      tone1.play(1000,100);
       incrementValue();
       if (!editMode) 
         {
           LEDsLock=false;
           EEPROM.write(LEDsLockEEPROMAddress, 0);
         }
+#ifdef INCLUDE_TONES
+      p=0; //shut off music )))
+      playTone(1000,100);
+#endif
     }
   
   if (functionUpButton == -1 && upButton.depressed == true)   
@@ -613,16 +616,16 @@ void loop() {
   
   if (downButton.clicks>0) 
     {
+#ifdef INCLUDE_TONES
       p=0; //shut off music )))
-      tone1.play(1000,100);
+      playTone(1000,100);
+#endif
       decrementValue();
       if (!editMode)
       {
         LEDsLock=true;
         EEPROM.write(LEDsLockEEPROMAddress, 1);
-        EEPROM.write(LEDsRedValueEEPROMAddress, RedLight);
-        EEPROM.write(LEDsGreenValueEEPROMAddress, GreenLight);
-        EEPROM.write(LEDsBlueValueEEPROMAddress, BlueLight);
+        EEPROM.write(HueEEPROMAddress, hue);
       }
     }
   
@@ -641,17 +644,21 @@ void loop() {
   
   if (!editMode)
   {
-    if (upButton.clicks<0)
+    if (upButton.clicks<0)  // Long click
       {
-        tone1.play(1000,100);
+#ifdef INCLUDE_TONES
+      playTone(1000,100);
+#endif
         RGBLedsOn=true;
         EEPROM.write(RGBLEDsEEPROMAddress,1);
         Serial.println("RGB=on");
-        setLEDsFromEEPROM();
+        setHueFromEEPROM();
       }
-    if (downButton.clicks<0)
+    if (downButton.clicks<0)  // Long click
     {
-      tone1.play(1000,100);
+#ifdef INCLUDE_TONES
+      playTone(1000,100);
+#endif
       RGBLedsOn=false;
       EEPROM.write(RGBLEDsEEPROMAddress,0);
       Serial.println("RGB=off");
@@ -723,6 +730,52 @@ String PreZero(int digit)
     else return String(digit);
 }
 
+void setLedColorHSV(byte h, byte s, byte v) {
+  // this is the algorithm to convert from RGB to HSV
+  h = (h * 192) / 256;  // 0..191
+  byte i = h / 32;   // We want a value of 0 thru 5
+  byte f = (h % 32) * 8;   // 'fractional' part of 'i' 0..248 in jumps
+
+  byte sInv = 255 - s;  // 0 -> 0xff, 0xff -> 0
+  byte fInv = 255 - f;  // 0 -> 0xff, 0xff -> 0
+  byte pv = v * sInv / 256;  // pv will be in range 0 - 255
+  byte qv = v * (256 - s * f / 256) / 256;
+  byte tv = v * (256 - s * fInv / 256) / 256;
+
+  switch (i) {
+  case 0:
+    RedLight = v;
+    GreenLight = tv;
+    BlueLight = pv;
+    break;
+  case 1:
+    RedLight = qv;
+    GreenLight = v;
+    BlueLight = pv;
+    break;
+  case 2:
+    RedLight = pv;
+    GreenLight = v;
+    BlueLight = tv;
+    break;
+  case 3:
+    RedLight = pv;
+    GreenLight = qv;
+    BlueLight = v;
+    break;
+  case 4:
+    RedLight = tv;
+    GreenLight = pv;
+    BlueLight = v;
+    break;
+  case 5:
+    RedLight = v;
+    GreenLight = pv;
+    BlueLight = qv;
+    break;
+  }
+}
+
 void rotateFireWorks()
 {
   if (!RGBLedsOn || digitalRead(DHVpin) == LOW)
@@ -732,23 +785,22 @@ void rotateFireWorks()
     analogWrite(BlueLedPin,0); 
     return;
   }
-  if (LEDsLock) {
-    setLEDsFromEEPROM();
-    return;
+  if ((nowMillis-prevTime4FireWorks)>=LED_UPDATE_FREQ)
+  {
+    prevTime4FireWorks=nowMillis;
+    setLedColorHSV(hue, 255, 255);
+    analogWrite(RedLedPin,RedLight);
+    analogWrite(GreenLedPin,GreenLight);
+    analogWrite(BlueLedPin,BlueLight);
+    if (!LEDsLock) {
+      // Doing it this way keeps the timing the same as for rotating colors. This
+      // is important to make sure the color is the same!
+      hue++;
+    }
+  #ifdef PLOT_LEDS
+    plotLEDs();
+  #endif
   }
-  RedLight=RedLight+fireforks[rotator*3];
-  GreenLight=GreenLight+fireforks[rotator*3+1];
-  BlueLight=BlueLight+fireforks[rotator*3+2];
-  analogWrite(RedLedPin,RedLight );
-  analogWrite(GreenLedPin,GreenLight);
-  analogWrite(BlueLedPin,BlueLight);  
-  cycle=cycle+1;
-  if (cycle==255)
-  {  
-    rotator=rotator+1;
-    cycle=0;
-  }
-  if (rotator>5) rotator=0;
 }
 
 String oneArmedBandit() {
@@ -889,9 +941,10 @@ void doTest()
   float Uinput=4.6*(5.0*adc)/1024.0+0.7;
   Serial.print(F("U input="));
   Serial.print(Uinput);
-  
+#ifdef INCLUDE_TONES
   p=song;
   parseSong(p);
+#endif
    
   analogWrite(RedLedPin,255);
   delay(1000);
@@ -1211,6 +1264,55 @@ char* parseSong(char *p)
   wholenote = (60 * 1000L / bpm) * 4;  // this is the time for whole note (in milliseconds)
   return p;
 }
+#ifdef INCLUDE_TONES
+unsigned long stopPlaying=0;
+
+void enableTimer() {
+  TCCR2A = 0;
+  TCCR2B = 0;
+  bitWrite(TCCR2A, WGM21, 1);
+  bitWrite(TCCR2B, CS20, 1);
+}
+/*
+TCCRx - Timer/Counter Control Register. The prescaler can be configured here.
+TCNTx - Timer/Counter Register. The actual timer value is stored here.
+OCRx - Output Compare Register
+ICRx - Input Capture Register (only for 16bit timer)
+TIMSKx - Timer/Counter Interrupt Mask Register. To enable/disable timer interrupts.
+TIFRx - Timer/Counter Interrupt Flag Register. Indicates a pending timer interrupt.
+ */
+
+void disableTimer()
+{
+  if (nowMillis < stopPlaying || stopPlaying == 0) {
+    return;
+  }
+
+  stopPlaying = 0;
+#if defined(TIMSK2) && defined(OCIE2A)
+  bitWrite(TIMSK2, OCIE2A, 0); // disable interrupt
+#endif
+
+  // configure timer 2 for phase correct pwm (8-bit)
+#if defined(TCCR2A) && defined(WGM20)
+  TCCR2A = (1 << WGM20);
+#endif
+
+  // set timer 2 prescale factor to 64
+#if defined(TCCR2B) && defined(CS22)
+  TCCR2B = (TCCR2B & 0b11111000) | (1 << CS22);
+#endif
+
+#if defined(OCR2A)
+  OCR2A = 0;
+#endif
+}
+
+void playTone(uint16_t freq, uint32_t dur) {
+  stopPlaying = nowMillis + dur;
+  enableTimer();
+  tone1.play(freq, dur);
+}
 
  // now begin note loop
  static unsigned long lastTimeNotePlaying=0;
@@ -1220,9 +1322,14 @@ char* parseSong(char *p)
       {
         return p;
       }
-    if (nowMillis-lastTimeNotePlaying>duration)
+     if (stopPlaying == 0) {
+       enableTimer();
+     }
+    if (nowMillis-lastTimeNotePlaying>duration) {
         lastTimeNotePlaying=nowMillis;
-      else return p;
+    } else {
+      return p;
+    }
     // first, get note duration, if available
     num = 0;
     while(isdigit(*p))
@@ -1232,6 +1339,8 @@ char* parseSong(char *p)
     
     if(num) duration = wholenote / num;
     else duration = wholenote / default_dur;  // we will need to check if we are a dotted note after
+
+    stopPlaying = nowMillis + duration;
 
     // now get the note
     note = 0;
@@ -1312,7 +1421,7 @@ char* parseSong(char *p)
     Serial.println(F("Incorrect Song Format!"));
     return 0; //error
   }
-
+#endif
 byte xlateMenuPosition(byte inPos) {
   if (DateYearIndex >= inPos && inPos >= DateDayIndex) {
     return dateIndexLookup[value[DateFormatIndex]][inPos-DateDayIndex];
@@ -1380,7 +1489,9 @@ void checkAlarmTime()
      lastTimeAlarmTriggired=nowMillis;
      Alarm1SecondBlock=true;
      Serial.println(F("Wake up, Neo!"));
+#ifdef INCLUDE_TONES
      p=song;
+#endif
    }
 }
 
@@ -1392,7 +1503,17 @@ boolean checkDisplay(boolean override) {
 	}
 
 	// If we should be displaying digits or alarm is playing turn HV on. Otherwise turn off
-  if (((nowMillis - displayOverrideStart) <= 5000) || (GLOB_TIME[HOUR_IDX] >= value[DigitsOnIndex] && GLOB_TIME[HOUR_IDX] < value[DigitsOffIndex]) || (p != 0 && *p != 0)) {
+	byte hour = GLOB_TIME[HOUR_IDX];
+	boolean displayDigits = hour >= value[DigitsOnIndex] && hour < value[DigitsOffIndex];
+	if (value[DigitsOnIndex] >= value[DigitsOffIndex]) {
+	  displayDigits = hour >= value[DigitsOnIndex] || hour < value[DigitsOffIndex];
+	}
+  if (((nowMillis - displayOverrideStart) <= 5000) || displayDigits
+#ifdef INCLUDE_TONES
+      || (p != 0 && *p != 0)
+#endif
+    )
+  {
 	  digitalWrite(DHVpin, HIGH);
 	  return true;
   } else {
@@ -1401,10 +1522,33 @@ boolean checkDisplay(boolean override) {
   }
 }
 
-void setLEDsFromEEPROM()
+void setHueFromEEPROM()
 {
-  digitalWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
-  digitalWrite(GreenLedPin, EEPROM.read(LEDsGreenValueEEPROMAddress));
-  digitalWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));
+  hue = EEPROM.read(HueEEPROMAddress);
 }
 
+#ifdef PLOT_LEDS
+void plotLEDs() {
+  int16_t comPkt[6];   //Buffer to hold the packet, note it is 16bit data type
+
+  comPkt[0] = 0xCDAB;               //Packet Header, indicating start of packet.
+  comPkt[1] = 4 * sizeof(int16_t);  //Size of data payload in bytes.
+  comPkt[2] = (int16_t) RedLight;
+  comPkt[3] = (int16_t) GreenLight;
+  comPkt[4] = (int16_t) BlueLight;
+  comPkt[5] = (int16_t) hue;
+
+   Serial.write((uint8_t *)comPkt, 12);
+   Serial.println(' ');
+}
+#endif
+
+void printLEDs(const char str[]) {
+  Serial.print(str);
+  Serial.print(" LEDs: ");
+  Serial.print(RedLight);
+  Serial.print(',');
+  Serial.print(GreenLight);
+  Serial.print(',');
+  Serial.println(BlueLight);
+}
