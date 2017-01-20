@@ -22,6 +22,7 @@ const String FirmwareVersion="010500";
 
 //#define PLOT_LEDS
 #define INCLUDE_TONES
+#define WIFI
 
 #include <SPI.h>
 #include <Wire.h>
@@ -31,6 +32,12 @@ const String FirmwareVersion="010500";
 #include <Tone.h>
 #endif
 #include <EEPROM.h>
+
+#ifdef WIFI
+#include "I2CClient.h"
+
+#define I2C_ME 0x23
+#endif
 
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
 const byte DHVpin=5; // off/on MAX1771 Driver  High Voltage(DHV) 110-220V
@@ -154,12 +161,15 @@ byte RGBLEDsEEPROMAddress=0;
 byte HourFormatEEPROMAddress=1;
 byte AlarmTimeEEPROMAddress=2;//3,4,5
 byte AlarmArmedEEPROMAddress=6;
+byte HueEEPROMAddress=8;
 byte LEDsLockEEPROMAddress=7;
 byte DigitsOnEEPROMAddress=11;
 byte DigitsOffEEPROMAddress=12;
 byte LeadingZeroEEPROMAddress=13;
 byte DateFormatEEPROMAddress=14;
-byte HueEEPROMAddress=8;
+byte CycleTimeEEPROMAddress=15;
+byte SaturationEEPROMAddress=16;
+byte BrightnessEEPROMAddress=17;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -187,7 +197,9 @@ NOTE_C7, NOTE_CS7, NOTE_D7, NOTE_DS7, NOTE_E7, NOTE_F7, NOTE_FS7, NOTE_G7, NOTE_
 };
 #endif
 
+#ifndef WIFI
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
+#endif
 boolean checkDisplay(boolean override=false);
 String getTimeString(boolean forceUpdate=false);
 String getDateString();
@@ -195,6 +207,10 @@ String getDateString();
 int functionDownButton=0;
 int functionUpButton=0;
 bool LEDsLock=false;
+byte ledCycleTime = 3;
+byte hue=0;
+byte saturation = 255;
+byte brightness = 255;
 
 struct Transition {
   /**
@@ -389,15 +405,22 @@ void setup()
   setTickGlobals();
 
   digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  High Voltage(DHV) 110-220V
-   
+
+#ifdef WIFI
+  Wire.begin(I2C_ME);
+  Wire.onReceive(receiveHandler);
+  Wire.onRequest(requestHandler);
+#else
   Wire.begin();
   //setRTCDateTime(23,40,00,25,7,15,1);
+#endif
   
   Serial.begin(115200);
   
     if (EEPROM.read(HourFormatEEPROMAddress)!=12) value[hModeValueIndex]=24; else value[hModeValueIndex]=12;
     if (EEPROM.read(LeadingZeroEEPROMAddress)==255) value[LeadingZeroIndex]=1; else value[LeadingZeroIndex]=EEPROM.read(LeadingZeroEEPROMAddress) % 2;
     if (EEPROM.read(DateFormatEEPROMAddress)==255) value[DateFormatIndex]=0; else value[DateFormatIndex]=EEPROM.read(DateFormatEEPROMAddress) % 3;
+    if (EEPROM.read(CycleTimeEEPROMAddress)==255) ledCycleTime = 5; else ledCycleTime=EEPROM.read(CycleTimeEEPROMAddress) % 200 + 1;
     if (EEPROM.read(RGBLEDsEEPROMAddress)!=0) RGBLedsOn=true; else RGBLedsOn=false;
     if (EEPROM.read(AlarmTimeEEPROMAddress)==255) value[AlarmHourIndex]=0; else value[AlarmHourIndex]=EEPROM.read(AlarmTimeEEPROMAddress);
     if (EEPROM.read(AlarmTimeEEPROMAddress+1)==255) value[AlarmMinuteIndex]=0; else value[AlarmMinuteIndex]=EEPROM.read(AlarmTimeEEPROMAddress+1);
@@ -406,6 +429,11 @@ void setup()
     if (EEPROM.read(LEDsLockEEPROMAddress)==255) LEDsLock=false; else LEDsLock=EEPROM.read(LEDsLockEEPROMAddress);
     if (EEPROM.read(DigitsOnEEPROMAddress)==255) value[DigitsOnIndex]=0; else value[DigitsOnIndex]=EEPROM.read(DigitsOnEEPROMAddress);
     if (EEPROM.read(DigitsOffEEPROMAddress)==255) value[DigitsOffIndex]=0; else value[DigitsOffIndex]=EEPROM.read(DigitsOffEEPROMAddress);
+
+    hue = EEPROM.read(HueEEPROMAddress);
+    saturation = EEPROM.read(SaturationEEPROMAddress);
+    brightness = EEPROM.read(BrightnessEEPROMAddress);
+
     Serial.print("led lock=");
     Serial.println(LEDsLock);
     
@@ -454,11 +482,13 @@ void setup()
     {
       setHueFromEEPROM();
     }
+#ifndef WIFI
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
   digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
   setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //Ð·Ð°Ð¿Ð¸Ñ�Ñ‹Ð²Ð°ÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ñ�Ñ‡Ð¸Ñ‚Ð°Ð½Ð½Ð¾Ðµ Ð²Ñ€ÐµÐ¼Ñ� Ð² RTC Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð¿ÑƒÑ�Ñ‚Ð¸Ñ‚ÑŒ Ð½Ð¾Ð²ÑƒÑŽ Ð¼Ð¸ÐºÑ€Ð¾Ñ�Ñ…ÐµÐ¼Ñƒ
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
+#endif
   setTickGlobals();
   //p=song;
 }
@@ -469,8 +499,6 @@ void rotateLeft(uint8_t &bits)
   bits = (bits << 1) | high_bit;
 }
 
-#define LED_UPDATE_FREQ 100 // Update LEDs at most every LED_UPDATE_FREQ ms
-byte hue=0;
 byte RedLight=255;
 byte GreenLight=0;
 byte BlueLight=0;
@@ -559,9 +587,11 @@ void loop() {
             EEPROM.write(DigitsOffEEPROMAddress, value[DigitsOffIndex]);
             break;
           }
+#ifndef WIFI
           digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
           setRTCDateTime(hour(),minute(),second(),day(),month(),year()%1000,1);
           digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
+#endif
         }
         value[menuPosition]=extractDigits(blinkMask);
       }
@@ -724,6 +754,158 @@ void loop() {
   }
 }
 
+#ifdef WIFI
+void printDigits(int digits){
+  // utility for digital clock display: prints preceding colon and leading 0
+  Serial.print(":");
+  if(digits < 10)
+    Serial.print('0');
+  Serial.print(digits);
+}
+
+void digitalClockDisplay(){
+  // digital clock display of the time
+  Serial.print(hour());
+  printDigits(minute());
+  printDigits(second());
+  Serial.print(" ");
+  Serial.print(day());
+  Serial.print(".");
+  Serial.print(month());
+  Serial.print(".");
+  Serial.print(year());
+  Serial.println();
+}
+
+void receiveHandler(int bytes) {
+  byte command = Wire.read();
+
+  if (command > ((byte)I2CCommands::alarm_time)) {
+    // This is just a regular string
+    Serial.print((char)command);
+    while (Wire.available()) {
+      char c = (char) Wire.read();
+      Serial.print(c);
+    }
+
+    Serial.println("");
+  } else {
+    Serial.print("Received command ");
+    Serial.print(command);
+    byte readValue = Wire.read();
+    Serial.print(", value ");
+    Serial.print(readValue);
+    switch ((I2CCommands) command) {
+    case I2CCommands::time:
+      {
+        byte year = readValue;
+        byte month = Wire.read();
+        byte day = Wire.read();
+        byte hours = Wire.read();
+        byte mins = Wire.read();
+        byte secs = Wire.read();
+        setTime(hours, mins, secs, day, month, year);
+        digitalClockDisplay();
+      }
+      break;
+    case I2CCommands::time_or_date:
+      menuPosition = readValue == 0 ? DateIndex : TimeIndex;
+      break;
+    case I2CCommands::date_format:
+      if (readValue >= 0 && readValue <= 2) {
+        value[DateFormatIndex] = readValue;
+        EEPROM.write(DateFormatEEPROMAddress, readValue);
+      }
+      break;
+    case I2CCommands::time_format:
+      value[hModeValueIndex] = readValue == 0 ? 24 : 12;
+      EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
+      break;  //false = 24 hour
+    case I2CCommands::leading_zero:
+      value[LeadingZeroIndex] = readValue > 0;
+      EEPROM.write(LeadingZeroEEPROMAddress, value[LeadingZeroIndex]);
+      break;
+    case I2CCommands::display_on:
+      value[DigitsOnIndex] = readValue;
+      EEPROM.write(DigitsOnEEPROMAddress,  value[DigitsOnIndex]);
+      break;
+    case I2CCommands::display_off:
+      value[DigitsOffIndex] = readValue;
+      EEPROM.write(DigitsOffEEPROMAddress, value[DigitsOffIndex]);
+      break;
+    case I2CCommands::backlight:
+      RGBLedsOn = readValue > 0;
+      EEPROM.write(RGBLEDsEEPROMAddress, RGBLedsOn);
+      break;
+    case I2CCommands::hue_cycling:
+      LEDsLock = readValue == 0;
+      EEPROM.write(LEDsLockEEPROMAddress, LEDsLock);
+      break;
+    case I2CCommands::cycle_time:
+      if (readValue >= 1 && readValue <= 200) {
+        ledCycleTime = readValue;
+        EEPROM.write(CycleTimeEEPROMAddress, ledCycleTime);
+      }
+      break;
+    case I2CCommands::hue:
+      hue = readValue;
+      EEPROM.write(HueEEPROMAddress, hue);
+      break;
+    case I2CCommands::saturation:
+      saturation = readValue;
+      EEPROM.write(SaturationEEPROMAddress, saturation);
+      break;
+    case I2CCommands::brightness:
+      brightness = readValue;
+      EEPROM.write(BrightnessEEPROMAddress, brightness);
+      break;
+    case I2CCommands::alarm_set:
+      value[AlarmArmedIndex] = readValue > 0;
+      EEPROM.write(AlarmArmedEEPROMAddress, value[AlarmArmedIndex]);
+      break;
+    case I2CCommands::alarm_time:
+      if (readValue >= 0 && readValue <= 23) {
+        value[AlarmHourIndex] = readValue;
+        EEPROM.write(AlarmTimeEEPROMAddress,  value[AlarmHourIndex]);
+      }
+      readValue = Wire.read();
+      if (readValue >= 0 && readValue <= 59) {
+        value[AlarmMinuteIndex] = Wire.read();
+        EEPROM.write(AlarmTimeEEPROMAddress+1,value[AlarmMinuteIndex]);
+      }
+      value[AlarmSecondIndex] = 0;
+      EEPROM.write(AlarmTimeEEPROMAddress+2,value[AlarmSecondIndex]);
+      break;
+    }
+  }
+}
+
+void requestHandler() {
+  byte results[17];
+  results[((byte)I2CCommands::time_or_date)] = menuPosition == DateIndex ? 0 : 1;
+  results[((byte)I2CCommands::date_format)] = value[DateFormatIndex];
+  results[((byte)I2CCommands::time_format)] = value[hModeValueIndex] == 24 ? 0 : 1;
+  results[((byte)I2CCommands::leading_zero)] = value[LeadingZeroIndex];
+  results[((byte)I2CCommands::display_on)] = value[DigitsOnIndex];
+  results[((byte)I2CCommands::display_off)] = value[DigitsOffIndex];
+
+  results[((byte)I2CCommands::backlight)] = RGBLedsOn;
+  results[((byte)I2CCommands::hue_cycling)] = !LEDsLock;
+  results[((byte)I2CCommands::cycle_time)] = ledCycleTime;
+  results[((byte)I2CCommands::hue)] = hue;
+  results[((byte)I2CCommands::saturation)] = saturation;
+  results[((byte)I2CCommands::brightness)] = brightness;
+
+  results[((byte)I2CCommands::alarm_set)] = value[AlarmArmedIndex];
+  results[((byte)I2CCommands::alarm_time)] = value[AlarmHourIndex];
+  results[((byte)I2CCommands::alarm_time)+1] = value[AlarmMinuteIndex];
+
+  digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
+  Wire.write(results, 17);
+  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
+}
+#endif
+
 String PreZero(int digit)
 {
   if (digit<10) return String("0")+String(digit);
@@ -785,10 +967,11 @@ void rotateFireWorks()
     analogWrite(BlueLedPin,0); 
     return;
   }
-  if ((nowMillis-prevTime4FireWorks)>=LED_UPDATE_FREQ)
+  // Approximately 20ms -> 6000ms, or complete cycle time of 6s to 1536s (about 25 mins)
+  if ((nowMillis-prevTime4FireWorks)>=(ledCycleTime * 6L * 1000) / 256)
   {
     prevTime4FireWorks=nowMillis;
-    setLedColorHSV(hue, 255, 255);
+    setLedColorHSV(hue, saturation, brightness);
     analogWrite(RedLedPin,RedLight);
     analogWrite(GreenLedPin,GreenLight);
     analogWrite(BlueLedPin,BlueLight);
@@ -1067,6 +1250,7 @@ void doDotBlink()
   }
 }
 
+#ifndef WIFI
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
   Wire.beginTransmission(DS1307_ADDRESS);
@@ -1083,7 +1267,6 @@ void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
   Wire.write(zero); //start 
 
   Wire.endTransmission();
-
 }
 
 byte decToBcd(byte val){
@@ -1112,6 +1295,7 @@ void getRTCTime()
   RTC_month = bcdToDec(Wire.read());
   RTC_year = bcdToDec(Wire.read());
 }
+#endif
 
 void clearBlanks(boolean timeDisplay) {
   for (int i=0; i<6; i++) {
