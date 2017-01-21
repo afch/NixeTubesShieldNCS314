@@ -794,7 +794,7 @@ void receiveHandler(int bytes) {
     Serial.print(command);
     byte readValue = Wire.read();
     Serial.print(", value ");
-    Serial.print(readValue);
+    Serial.println(readValue);
     switch ((I2CCommands) command) {
     case I2CCommands::time:
       {
@@ -869,8 +869,10 @@ void receiveHandler(int bytes) {
         EEPROM.write(AlarmTimeEEPROMAddress,  value[AlarmHourIndex]);
       }
       readValue = Wire.read();
+      Serial.print("And value ");
+      Serial.println(readValue);
       if (readValue >= 0 && readValue <= 59) {
-        value[AlarmMinuteIndex] = Wire.read();
+        value[AlarmMinuteIndex] = readValue;
         EEPROM.write(AlarmTimeEEPROMAddress+1,value[AlarmMinuteIndex]);
       }
       value[AlarmSecondIndex] = 0;
@@ -915,11 +917,11 @@ String PreZero(int digit)
 void setLedColorHSV(byte h, byte s, byte v) {
   // this is the algorithm to convert from RGB to HSV
   h = (h * 192) / 256;  // 0..191
-  byte i = h / 32;   // We want a value of 0 thru 5
-  byte f = (h % 32) * 8;   // 'fractional' part of 'i' 0..248 in jumps
+  unsigned int  i = h / 32;   // We want a value of 0 thru 5
+  unsigned int f = (h % 32) * 8;   // 'fractional' part of 'i' 0..248 in jumps
 
-  byte sInv = 255 - s;  // 0 -> 0xff, 0xff -> 0
-  byte fInv = 255 - f;  // 0 -> 0xff, 0xff -> 0
+  unsigned int sInv = 255 - s;  // 0 -> 0xff, 0xff -> 0
+  unsigned int fInv = 255 - f;  // 0 -> 0xff, 0xff -> 0
   byte pv = v * sInv / 256;  // pv will be in range 0 - 255
   byte qv = v * (256 - s * f / 256) / 256;
   byte tv = v * (256 - s * fInv / 256) / 256;
@@ -1088,6 +1090,15 @@ byte CheckButtonsState()
     }
 }
 
+int get12Hour() {
+  if (GLOB_TIME[HOUR_IDX] == 0)
+    return 12;
+  else if (GLOB_TIME[HOUR_IDX] <= 12)
+    return GLOB_TIME[HOUR_IDX];
+  else
+    return GLOB_TIME[HOUR_IDX] - 12;
+}
+
 String getTimeString(boolean forceUpdate)
 {
   static unsigned int lastTimeStringWasUpdated = GLOB_TIME[SEC_IDX];
@@ -1097,7 +1108,7 @@ String getTimeString(boolean forceUpdate)
     //doDotBlink();
     lastTimeStringWasUpdated=GLOB_TIME[SEC_IDX];
     if (value[hModeValueIndex]==24) return PreZero(GLOB_TIME[HOUR_IDX])+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]);
-      else return PreZero(hourFormat12(nowMillis))+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]);
+      else return PreZero(get12Hour())+PreZero(GLOB_TIME[MIN_IDX])+PreZero(GLOB_TIME[SEC_IDX]);
     
   }
   return stringToDisplay;
@@ -1235,6 +1246,7 @@ void doDotBlink()
   {
     lastTimeBlink=GLOB_TIME[SEC_IDX];;
     dotState=!dotState;
+
     if (dotState) 
       {
         dotPattern=B11000000;
@@ -1247,6 +1259,10 @@ void doDotBlink()
         /*digitalWrite(pinUpperDots, LOW); 
         digitalWrite(pinLowerDots, LOW);*/
       }
+
+    if (value[AlarmArmedIndex]) {
+      dotPattern^=B01000000; // If alarm is set, alternate upper/lower dots
+    }
   }
 }
 
