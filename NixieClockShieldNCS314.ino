@@ -197,9 +197,8 @@ NOTE_C7, NOTE_CS7, NOTE_D7, NOTE_DS7, NOTE_E7, NOTE_F7, NOTE_FS7, NOTE_G7, NOTE_
 };
 #endif
 
-#ifndef WIFI
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
-#endif
+
 boolean checkDisplay(boolean override=false);
 String getTimeString(boolean forceUpdate=false);
 String getDateString();
@@ -406,14 +405,9 @@ void setup()
 
   digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  High Voltage(DHV) 110-220V
 
-#ifdef WIFI
-  Wire.begin(I2C_ME);
-  Wire.onReceive(receiveHandler);
-  Wire.onRequest(requestHandler);
-#else
+  // Initialize from clock in case WiFi is down on startup
   Wire.begin();
   //setRTCDateTime(23,40,00,25,7,15,1);
-#endif
   
   Serial.begin(115200);
   
@@ -482,14 +476,22 @@ void setup()
     {
       setHueFromEEPROM();
     }
-#ifndef WIFI
+
+  // Initialize with time from RTC in case WiFi is down
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
   digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
   setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //Ð·Ð°Ð¿Ð¸Ñ�Ñ‹Ð²Ð°ÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ñ�Ñ‡Ð¸Ñ‚Ð°Ð½Ð½Ð¾Ðµ Ð²Ñ€ÐµÐ¼Ñ� Ð² RTC Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð¿ÑƒÑ�Ñ‚Ð¸Ñ‚ÑŒ Ð½Ð¾Ð²ÑƒÑŽ Ð¼Ð¸ÐºÑ€Ð¾Ñ�Ñ…ÐµÐ¼Ñƒ
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
-#endif
   setTickGlobals();
+
+#ifdef WIFI
+  // Connect to WiFi instead of RTC
+  Wire.begin(I2C_ME);
+  Wire.onReceive(receiveHandler);
+  Wire.onRequest(requestHandler);
+#endif
+
   //p=song;
 }
 
@@ -1266,7 +1268,6 @@ void doDotBlink()
   }
 }
 
-#ifndef WIFI
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
   Wire.beginTransmission(DS1307_ADDRESS);
@@ -1311,7 +1312,7 @@ void getRTCTime()
   RTC_month = bcdToDec(Wire.read());
   RTC_year = bcdToDec(Wire.read());
 }
-#endif
+
 
 void clearBlanks(boolean timeDisplay) {
   for (int i=0; i<6; i++) {
