@@ -23,6 +23,7 @@ const String FirmwareVersion="010500";
 //#define PLOT_LEDS
 #define INCLUDE_TONES
 #define WIFI
+#define ONE_TWO
 
 #include <SPI.h>
 #include <Wire.h>
@@ -39,7 +40,11 @@ const String FirmwareVersion="010500";
 #define I2C_ME 0x23
 #endif
 
+#ifdef ONE_TWO
+const byte LEpin=10; //pin Latch Enabled data accepted while HI level
+#else
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
+#endif
 const byte DHVpin=5; // off/on MAX1771 Driver  High Voltage(DHV) 110-220V
 const byte RedLedPin=9; //MCU WDM output for red LEDs 9-g, timer 1, phase correct 490.2hz.
 const byte GreenLedPin=6; //MCU WDM output for green LEDs 6-b, timer 0, fast PWM 976hz. Also runs millis() and delay() so leave this alone!
@@ -589,11 +594,9 @@ void loop() {
             EEPROM.write(DigitsOffEEPROMAddress, value[DigitsOffIndex]);
             break;
           }
-#ifndef WIFI
           digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
           setRTCDateTime(hour(),minute(),second(),day(),month(),year()%1000,1);
           digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
-#endif
         }
         value[menuPosition]=extractDigits(blinkMask);
       }
@@ -1270,6 +1273,10 @@ void doDotBlink()
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
+#ifdef WIFI
+  Wire.begin();
+#endif
+
   Wire.beginTransmission(DS1307_ADDRESS);
   Wire.write(zero); //stop Oscillator
 
@@ -1284,6 +1291,13 @@ void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
   Wire.write(zero); //start 
 
   Wire.endTransmission();
+
+#ifdef WIFI
+  // Connect to WiFi instead of RTC
+  Wire.begin(I2C_ME);
+  Wire.onReceive(receiveHandler);
+  Wire.onRequest(requestHandler);
+#endif
 }
 
 byte decToBcd(byte val){
