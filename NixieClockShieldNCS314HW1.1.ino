@@ -22,7 +22,7 @@ const String FirmwareVersion="010500";
 
 //#define PLOT_LEDS
 #define INCLUDE_TONES
-#define WIFI
+//#define WIFI
 //#define ONE_TWO
 
 #include <SPI.h>
