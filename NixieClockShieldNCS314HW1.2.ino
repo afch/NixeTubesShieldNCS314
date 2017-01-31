@@ -1,6 +1,9 @@
-const String FirmwareVersion="010200";
-//Format                _X.XX__    
+const String FirmwareVersion="010210";
+//Format                _X.XXX_    
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
+//1.021 31.01.2017
+//Added: time synchronizing each 10 seconds
+//Fixed: not correct time reading from RTC while start up
 //1.02 17.10.2016
 //Fixed: RGB color controls
 //Update to Arduino IDE 1.6.12 (Time.h replaced to TimeLib.h)
@@ -36,6 +39,7 @@ const byte pinUpperDots=12; //HIGH value light a dots
 const byte pinLowerDots=8;  //HIGH value light a dots
 const word fpsLimit=16666; // 1/60*1.000.000 //limit maximum refresh rate on 60 fps
 const byte pinTemp=7;
+bool RTC_present;
 
 //OneWire  ds(pinTemp);
 
@@ -224,6 +228,20 @@ void setup()
       setLEDsFromEEPROM();
     }
   getRTCTime();
+  byte prevSeconds=RTC_seconds;
+  unsigned long RTC_ReadingStartTime=millis();
+  RTC_present=true;
+  while(prevSeconds==RTC_seconds)
+  {
+    getRTCTime();
+    //Serial.println(RTC_seconds);
+    if ((millis()-RTC_ReadingStartTime)>3000)
+    {
+      Serial.println(F("Warning! RTC DON'T RESPOND!"));
+      RTC_present=false;
+      break;
+    }
+  }
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
   digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //записываем только что считанное время в RTC чтобы запустить новую микросхему
@@ -251,16 +269,12 @@ MAIN Programm
 ***************************************************************************************************************/
 void loop() {
 
-/*   if (irrecv.decode(&results)) {
-    Serial.println(results.value, HEX);
-    irrecv.resume(); // Receive the next value
-  }*/
-
-  //getTemp();
-  /*if (Serial1.available()>0)
-    {
-      Serial.write(Serial1.read());
-    }*/
+ if (((millis()%10000)==0)&&(RTC_present)) //synchronize with RTC every 10 seconds
+ {
+  getRTCTime();
+  setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
+  Serial.println("sync");
+ }
   
   p=playmusic(p);
   
@@ -587,7 +601,7 @@ String updateDisplayString()
 void doTest()
 {
   Serial.print(F("Firmware version: "));
-  Serial.println(FirmwareVersion.substring(1,2)+"."+FirmwareVersion.substring(2,4));
+  Serial.println(FirmwareVersion.substring(1,2)+"."+FirmwareVersion.substring(2,5));
   Serial.println(F("Start Test"));
   int adc=analogRead(A3);
   float Uinput=4.6*(5.0*adc)/1024.0+0.7;
