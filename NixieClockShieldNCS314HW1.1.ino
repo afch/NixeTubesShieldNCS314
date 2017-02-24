@@ -23,7 +23,7 @@ const String FirmwareVersion="010500";
 //#define PLOT_LEDS
 #define INCLUDE_TONES
 #define WIFI
-//#define ONE_TWO
+#define ONE_TWO
 
 #include <SPI.h>
 #include <Wire.h>
@@ -52,6 +52,7 @@ const byte BlueLedPin=3; //MCU WDM output for blue LEDs 3-r, timer 2 - tone libr
 const byte pinSet=A0;
 const byte pinUp=A2;
 const byte pinDown=A1;
+const byte pinLS=A3;
 const byte pinBuzzer=2;
 const byte pinUpperDots=12; //HIGH value light a dots
 const byte pinLowerDots=8;  //HIGH value light a dots
@@ -65,8 +66,18 @@ byte menuPosition=0; // 0 - time
                     
 byte blinkMask=B00000000; //bit mask for blinking digits (1 - blink, 0 - constant light)
 
-//                      0      1      2      3      4      5      6      7      8       9
-word SymbolArray[10]={65534, 65533, 65531, 65527, 65519, 65503, 65471, 65407, 65279, 65023};
+word SymbolArray[10]={
+      65534 & 0x03ff,
+      65533 & 0x03ff,
+      65531 & 0x03ff,
+      65527 & 0x03ff,
+      65519 & 0x03ff,
+      65503 & 0x03ff,
+      65471 & 0x03ff,
+      65407 & 0x03ff,
+      65279 & 0x03ff,
+      65023 & 0x03ff
+};
 
 byte dotPattern=B00000000; //bit mask for separating dots
                           //B00000000 - turn off up and down dots 
@@ -105,6 +116,8 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define DF_DDMMYY 0
 #define DF_MMDDYY 1
 #define DF_YYMMDD 2
+
+byte qh,  qm, qs, qd, qmon, qy;
 
 byte dateIndexLookup[3][3] = {
     {DateDayIndex, DateMonthIndex, DateYearIndex},
@@ -207,6 +220,7 @@ void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w=1);
 boolean checkDisplay(boolean override=false);
 String getTimeString(boolean forceUpdate=false);
 String getDateString();
+boolean regularDisplay = true;
 
 int functionDownButton=0;
 int functionUpButton=0;
@@ -215,6 +229,80 @@ byte ledCycleTime = 3;
 byte hue=0;
 byte saturation = 255;
 byte brightness = 255;
+
+struct SoftPWM {
+  boolean isOff = true;
+  byte onPercent = 80;
+  int count = 0;
+
+  SoftPWM(byte onPercent) {
+    reset(onPercent);
+  }
+
+  boolean off() {
+    if (onPercent == 0) {
+      return true;
+    }
+
+    if (onPercent == 100) {
+      return false;
+    }
+
+    if (isOff) {
+      boolean newState = ++count * onPercent / 100 == 0;
+      if (newState != isOff) {
+        isOff = false;
+        count = 0;
+      }
+    } else {
+      boolean newState = ++count * (100 - onPercent) / 100 == 0;
+      if (newState != isOff) {
+        isOff = true;
+        count = 0;
+      }
+    }
+
+    return isOff;
+  }
+
+  void setDuty(byte onPercent) {
+    if (this->onPercent != onPercent) {
+      // Scale count
+      if (onPercent != 0 && this->onPercent != 0) {
+        if (isOff) {
+          if (onPercent > this->onPercent) {
+            count = count * this->onPercent / onPercent;
+          }
+          // Else leave it to run its course
+        } else {
+          if (onPercent < this->onPercent) {
+            count = count * onPercent / this->onPercent;
+          }
+          // Else leave it to run its course
+        }
+      } else {
+        count = 0;
+      }
+      this->onPercent = onPercent;
+    }
+  }
+
+  byte getDuty() {
+    return onPercent;
+  }
+
+  void reset(byte onPercent) {
+    Serial.println(onPercent);
+    this->onPercent = onPercent;
+    isOff = true;
+    count = 0;
+  }
+};
+
+SoftPWM displayPWM(100);
+SoftPWM fadeOutPWM(100);
+SoftPWM fadeInPWM(100);
+SoftPWM colonPWM(100);
 
 struct Transition {
   /**
@@ -484,7 +572,6 @@ void setup()
 
   // Initialize with time from RTC in case WiFi is down
   getRTCTime();
-  setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
   digitalWrite(DHVpin, LOW); // off MAX1771 Driver  High Voltage(DHV) 110-220V
   setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //Ð·Ð°Ð¿Ð¸Ñ�Ñ‹Ð²Ð°ÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ñ�Ñ‡Ð¸Ñ‚Ð°Ð½Ð½Ð¾Ðµ Ð²Ñ€ÐµÐ¼Ñ� Ð² RTC Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð¿ÑƒÑ�Ñ‚Ð¸Ñ‚ÑŒ Ð½Ð¾Ð²ÑƒÑŽ Ð¼Ð¸ÐºÑ€Ð¾Ñ�Ñ…ÐµÐ¼Ñƒ
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  High Voltage(DHV) 110-220V
@@ -500,10 +587,42 @@ void setup()
   //p=song;
 }
 
-void rotateLeft(uint8_t &bits)
-{
-   uint8_t high_bit = bits & (1 << 7) ? 1 : 0;
-  bits = (bits << 1) | high_bit;
+#define LIGHT_MAX 150
+#define MIN_LIGHT_DELTA 5
+#define MAX_LIGHT_DELTA 20
+#define MIN_DUTY_CYCLE 9
+#define MIN_LED_BRIGHTNESS 3
+
+byte adjustedBrightness;
+int oldLightValue = 0;
+int cumulativeError = 0;
+
+void setBrightness() {
+  int rawValue = analogRead(pinLS);
+
+  if (rawValue < LIGHT_MAX) {
+    cumulativeError += oldLightValue - rawValue;
+    oldLightValue = rawValue;
+
+    if (abs(cumulativeError) > MIN_LIGHT_DELTA) {
+      cumulativeError = 0;
+
+      // Scale ratio to a percentage but with a minimum
+      int dutyCycle = rawValue * (100 - MIN_DUTY_CYCLE) / LIGHT_MAX + MIN_DUTY_CYCLE;
+
+      // Quantize the duty cycle
+      dutyCycle = (dutyCycle + MIN_DUTY_CYCLE - 1) / MIN_DUTY_CYCLE * MIN_DUTY_CYCLE;
+      displayPWM.setDuty(dutyCycle);
+      colonPWM.setDuty(dutyCycle);
+      if (brightness >= MIN_LED_BRIGHTNESS) {
+        adjustedBrightness = (brightness - MIN_LED_BRIGHTNESS) * rawValue / LIGHT_MAX + MIN_LED_BRIGHTNESS;
+      }
+    }
+  } else {
+    displayPWM.setDuty(100);
+    colonPWM.setDuty(100);
+    adjustedBrightness = brightness;
+  }
 }
 
 byte RedLight=255;
@@ -511,20 +630,36 @@ byte GreenLight=0;
 byte BlueLight=0;
 unsigned long prevTime=0; // time of lase tube was lit
 unsigned long prevTime4FireWorks=0;  //time of last RGB changed
-//int minuteL=0; //младшая цифра минут
+unsigned int lastSet = 0;
 
 /***************************************************************************************************************
 MAIN Programm
 ***************************************************************************************************************/
 void loop() {
   setTickGlobals();
+  setBrightness();
+
 #ifdef INCLUDE_TONES
   disableTimer();
   p=playmusic(p);
 #endif
+
+  if (lastSet != GLOB_TIME[MIN_IDX]) {
+    lastSet = GLOB_TIME[MIN_IDX];
+    if (editMode == false) {
+//      getRTCTime();
+    }
+  }
+
+  if (qy != 0) {
+    setRTCDateTime(qh, qm, qs, qd, qmon, qy % 1000, 1);
+    qy = 0;
+  }
+
   rotateFireWorks(); //change color (by 1 step)
 
   doIndication();
+  regularDisplay = false;
   
   clearBlanks(false);
 
@@ -543,7 +678,7 @@ void loop() {
   if (setButton.clicks>0) //short click, advance menu position by 1
     {
       if (digitalRead(DHVpin) == LOW) {
-        // If display is turned off, just turn it back on again
+        // If display is turned off, just turn it back off again
         checkDisplay(true);
       } else {
         // Otherwise reset temp timer (just in case) and advance menu
@@ -686,7 +821,7 @@ void loop() {
 #endif
         RGBLedsOn=true;
         EEPROM.write(RGBLEDsEEPROMAddress,1);
-        Serial.println("RGB=on");
+        Serial.println("RGB=off");
         setHueFromEEPROM();
       }
     if (downButton.clicks<0)  // Long click
@@ -720,6 +855,7 @@ void loop() {
         if ((GLOB_TIME[MIN_IDX] % 10) == 0 && (GLOB_TIME[SEC_IDX] >= 0 && GLOB_TIME[SEC_IDX] <= 10)) {
           stringToDisplay = oneArmedBandit();
         } else {
+          regularDisplay = true;
           stringToDisplay = getTimeString();
           clearBlanks(true);
         }
@@ -728,6 +864,7 @@ void loop() {
     }
        break;
     case DateIndex: //date mode
+      regularDisplay = true;
       stringToDisplay=getDateString();
       dotPattern=B01000000;//turn on lower dots
       /*digitalWrite(pinUpperDots, LOW);
@@ -782,6 +919,15 @@ void digitalClockDisplay(){
   Serial.println();
 }
 
+void queueTimeSet(byte h, byte m, byte s, byte d, byte mon, byte y) {
+  qh = h;
+  qm = m;
+  qs = s;
+  qd = d;
+  qmon = mon;
+  qy = y;
+}
+
 void receiveHandler(int bytes) {
   byte command = Wire.read();
 
@@ -810,6 +956,7 @@ void receiveHandler(int bytes) {
         byte mins = Wire.read();
         byte secs = Wire.read();
         setTime(hours, mins, secs, day, month, year);
+//        queueTimeSet(hours, mins, secs, day, month, year);
         digitalClockDisplay();
       }
       break;
@@ -978,7 +1125,7 @@ void rotateFireWorks()
   if ((nowMillis-prevTime4FireWorks)>=(ledCycleTime * 6L * 1000) / 256)
   {
     prevTime4FireWorks=nowMillis;
-    setLedColorHSV(hue, saturation, brightness);
+    setLedColorHSV(hue, saturation, adjustedBrightness);
     analogWrite(RedLedPin,RedLight);
     analogWrite(GreenLedPin,GreenLight);
     analogWrite(BlueLedPin,BlueLight);
@@ -1004,73 +1151,89 @@ String oneArmedBandit() {
   return stringToDisplay;
 }
 
+long lastDigits = 0;
+unsigned long startFade = 0;
+#define FADE_CHANGE_QUANT 8
+#define FADE_TIME 200
+
 void doIndication()
 {
-  
-  static unsigned long lastTimeInterval1Started;
-  if ((micros()-lastTimeInterval1Started)<fpsLimit) return;
-  //if (menuPosition==TimeIndex) doDotBlink();
-  lastTimeInterval1Started=micros();
-    
   digitalWrite(LEpin, LOW);    // allow data input (Transparent mode)
    
-  /* 
-    SPI.transfer((b|dotPattern) & doEditBlink()); // anode
-    SPI.transfer(highBytesArray[stringToDisplay.substring(curTube,curTube+1).toInt()]);
-    SPI.transfer(lowBytesArray[stringToDisplay.substring(curTube,curTube+1).toInt()]);
-  */
-  //word SymbolArray2[10]={65534, 65023, 65279, 65407, 65471, 65503, 65519, 65527, 65531, 65533}; // used only for shiled with HW ver 1.0 //it has hardware bug in wiring
-  
-  unsigned long long Var64=0;
-  unsigned long long tmpVar64=0;
-  
   long digits=stringToDisplay.toInt();
-  
-  Var64=~Var64;
-  tmpVar64=~tmpVar64;
-  
-  Var64=Var64&((SymbolArray[digits%10]|doEditBlink(5))<<6);
-  Var64=Var64<<48;
-  digits=digits/10;
-  
-  tmpVar64=(SymbolArray[digits%10]|doEditBlink(4))<<6;
-  Var64|=(tmpVar64<<38);
-  digits=digits/10;
 
-  tmpVar64=(SymbolArray[digits%10]|doEditBlink(3))<<6;
-  Var64|=(tmpVar64<<28);
-  digits=digits/10;
+  unsigned long long var64 = ~0;
+
+  doEditBlink(0); // Otherwise it is optimized away below!
+
+  if (regularDisplay && digits != lastDigits) {
+    if (nowMillis - startFade > FADE_TIME) {
+      // Fading lasts at most FADE_TIME ms
+      fadeInPWM.reset(0);
+      fadeOutPWM.reset(displayPWM.getDuty());
+      lastDigits = digits;
+    }
+  } else {
+    startFade = nowMillis;
+  }
+
+  byte mainDutyCycle = displayPWM.getDuty();
+  byte dutyCycle = mainDutyCycle * (FADE_TIME + (startFade - nowMillis)) / FADE_TIME;
+
+  if (regularDisplay && digits != lastDigits) {
+    fadeOutPWM.setDuty((dutyCycle + FADE_CHANGE_QUANT - 1) / FADE_CHANGE_QUANT * FADE_CHANGE_QUANT);
+    fadeInPWM.setDuty((mainDutyCycle - dutyCycle + FADE_CHANGE_QUANT - 1) / FADE_CHANGE_QUANT * FADE_CHANGE_QUANT);
+  }
+
+  boolean fadeInOff = fadeInPWM.off();
+  boolean fadeOutOff = fadeOutPWM.off();
+  boolean displayOff = displayPWM.off();
+
+  var64 = 0;
+  long tmpLastDigits = lastDigits;
+  unsigned long long tmpVar64 = 0;
+  for (int i=50; i >= 0; i -= 10) {
+    unsigned int shiftMask = 0x03ff;
+    if (!blanks[i/10]) {
+      if (regularDisplay && (digits % 10 != tmpLastDigits % 10)) {
+        if (!fadeInOff) {
+          shiftMask &= SymbolArray[digits%10];
+        }
+
+        if (!fadeOutOff) {
+          shiftMask &= SymbolArray[tmpLastDigits%10];
+        }
+      } else {
+        if (!displayOff) {
+          shiftMask = SymbolArray[digits%10] | doEditBlink(i/10);
+        }
+      }
+    }
+
+    tmpVar64=shiftMask;
+
+    var64 |= tmpVar64<<i;
+    digits=digits/10;
+    tmpLastDigits=tmpLastDigits/10;
+  }
+
+  uint8_t iTmp=0;
   
-  tmpVar64=(SymbolArray[digits%10]|doEditBlink(2))<<6;
-  Var64|=(tmpVar64<<18);
-  digits=digits/10;
-  
-  tmpVar64=(SymbolArray[digits%10]|doEditBlink(1))<<6;
-  Var64|=(tmpVar64<<8);
-  digits=digits/10;
-  
-  tmpVar64=(SymbolArray[digits%10]|doEditBlink(0))<<6>>2;
-  Var64|=tmpVar64;
-  
-  Var64=(Var64>>4);
-    
-  unsigned int iTmp=0;
-  
-  iTmp=Var64>>56;
+  iTmp=var64>>56;
   SPI.transfer(iTmp);
-  iTmp=Var64>>48;
+  iTmp=var64>>48;
   SPI.transfer(iTmp);
-  iTmp=Var64>>40;
+  iTmp=var64>>40;
   SPI.transfer(iTmp);
-  iTmp=Var64>>32;
+  iTmp=var64>>32;
   SPI.transfer(iTmp);
-  iTmp=Var64>>24;
+  iTmp=var64>>24;
   SPI.transfer(iTmp);
-  iTmp=Var64>>16;
+  iTmp=var64>>16;
   SPI.transfer(iTmp);
-  iTmp=Var64>>8;
+  iTmp=var64>>8;
   SPI.transfer(iTmp);
-  iTmp=Var64;
+  iTmp=var64;
   SPI.transfer(iTmp);
 
   digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)    
@@ -1141,8 +1304,9 @@ void doTest()
   Serial.print(F("U input="));
   Serial.print(Uinput);
 #ifdef INCLUDE_TONES
-  p=song;
-  parseSong(p);
+  //p=song;
+//  parseSong(p);
+  p = 0;
 #endif
    
   analogWrite(RedLedPin,255);
@@ -1182,54 +1346,33 @@ void doTest()
      stringToDisplay=testStringArray[strIndex];
      long digits=stringToDisplay.toInt();
    
-    unsigned long long Var64=0;
-    unsigned long long tmpVar64=0;
-    Var64=~Var64;
-    tmpVar64=~tmpVar64;
-  
-    Var64=Var64&((SymbolArray[digits%10])<<6);
-    Var64=Var64<<48;
-    digits=digits/10;
-  
-    tmpVar64=(SymbolArray[digits%10])<<6;
-    Var64|=(tmpVar64<<38);
-    digits=digits/10;
+     unsigned long long var64 = 0;
+     unsigned long long tmpVar64 = 0;
+     for (int i=50; i >= 0; i -= 10) {
+       tmpVar64=SymbolArray[digits%10] | doEditBlink(i/10);
 
-    tmpVar64=(SymbolArray[digits%10])<<6;
-    Var64|=(tmpVar64<<28);
-    digits=digits/10;
-  
-    tmpVar64=(SymbolArray[digits%10])<<6;
-    Var64|=(tmpVar64<<18);
-    digits=digits/10;
-  
-    tmpVar64=(SymbolArray[digits%10])<<6;
-    Var64|=(tmpVar64<<8);
-    digits=digits/10;
-  
-    tmpVar64=(SymbolArray[digits%10])<<6>>2;
-    Var64|=tmpVar64;
-  
-    Var64=(Var64>>4);
-    
-    unsigned int iTmp=0;
-  
+       var64 |= tmpVar64<<i;
+       digits=digits/10;
+     }
+
     digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
-    iTmp=Var64>>56;
+    uint8_t iTmp=0;
+    
+    iTmp=var64>>56;
     SPI.transfer(iTmp);
-    iTmp=Var64>>48;
+    iTmp=var64>>48;
     SPI.transfer(iTmp);
-    iTmp=Var64>>40;
+    iTmp=var64>>40;
     SPI.transfer(iTmp);
-    iTmp=Var64>>32;
+    iTmp=var64>>32;
     SPI.transfer(iTmp);
-    iTmp=Var64>>24;
+    iTmp=var64>>24;
     SPI.transfer(iTmp);
-    iTmp=Var64>>16;
+    iTmp=var64>>16;
     SPI.transfer(iTmp);
-    iTmp=Var64>>8;
+    iTmp=var64>>8;
     SPI.transfer(iTmp);
-    iTmp=Var64;
+    iTmp=var64;
     SPI.transfer(iTmp);
       
     digitalWrite(LEpin, LOW);     // latching data 
@@ -1242,14 +1385,21 @@ void doTest()
   
 }
 
+byte savedDotPattern = 0;
+
 void doDotBlink()
 {
   static unsigned long lastTimeBlink=GLOB_TIME[SEC_IDX];
   static bool dotState=0;
 
+  dotPattern = savedDotPattern;
+
   if (lastTimeBlink != GLOB_TIME[SEC_IDX])
   {
-    lastTimeBlink=GLOB_TIME[SEC_IDX];;
+    lastTimeBlink=GLOB_TIME[SEC_IDX];
+    Serial.print("LS=");
+    Serial.println(analogRead(pinLS));
+
     dotState=!dotState;
 
     if (dotState) 
@@ -1268,15 +1418,17 @@ void doDotBlink()
     if (value[AlarmArmedIndex]) {
       dotPattern^=B01000000; // If alarm is set, alternate upper/lower dots
     }
+
+    savedDotPattern = dotPattern;
+  }
+
+  if (colonPWM.off()) {
+      dotPattern = 0;
   }
 }
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
-#ifdef WIFI
-  Wire.begin();
-#endif
-
   Wire.beginTransmission(DS1307_ADDRESS);
   Wire.write(zero); //stop Oscillator
 
@@ -1291,13 +1443,6 @@ void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
   Wire.write(zero); //start 
 
   Wire.endTransmission();
-
-#ifdef WIFI
-  // Connect to WiFi instead of RTC
-  Wire.begin(I2C_ME);
-  Wire.onReceive(receiveHandler);
-  Wire.onRequest(requestHandler);
-#endif
 }
 
 byte decToBcd(byte val){
@@ -1318,13 +1463,18 @@ void getRTCTime()
 
   Wire.requestFrom(DS1307_ADDRESS, 7);
 
-  RTC_seconds = bcdToDec(Wire.read());
-  RTC_minutes = bcdToDec(Wire.read());
-  RTC_hours = bcdToDec(Wire.read() & 0b111111); //24 hour time
-  RTC_day_of_week = bcdToDec(Wire.read()); //0-6 -> sunday - Saturday
-  RTC_day = bcdToDec(Wire.read());
-  RTC_month = bcdToDec(Wire.read());
-  RTC_year = bcdToDec(Wire.read());
+  if (Wire.available()) {
+    Serial.println("Setting time from RTC");
+    RTC_seconds = bcdToDec(Wire.read());
+    RTC_minutes = bcdToDec(Wire.read());
+    RTC_hours = bcdToDec(Wire.read() & 0b111111); //24 hour time
+    RTC_day_of_week = bcdToDec(Wire.read()); //0-6 -> sunday - Saturday
+    RTC_day = bcdToDec(Wire.read());
+    RTC_month = bcdToDec(Wire.read());
+    RTC_year = bcdToDec(Wire.read());
+
+    setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
+  }
 }
 
 
@@ -1340,13 +1490,9 @@ void clearBlanks(boolean timeDisplay) {
 
 word doEditBlink(int pos)
 {
-  if (blanks[pos]) {
-    return 0xFFFF;
-  }
-
   if (!BlinkUp) return 0;
   if (!BlinkDown) return 0;
-  //if (pos==5) return 0xFFFF; //need to be deleted for testing purpose only!
+
   int lowBit=blinkMask>>pos;
   lowBit=lowBit&B00000001;
   
@@ -1373,7 +1519,12 @@ word doEditBlink(int pos)
   if ((((dotPattern&~tmp)>>7)&1)==1) digitalWrite(pinUpperDots, HIGH);
       else digitalWrite(pinUpperDots, LOW);
       
-  if ((blinkState==true) && (lowBit==1)) mask=0xFFFF;//mask=B11111111;
+  if ((blinkState==true) && (lowBit==1)) mask=0x03FF;
+
+  if (blanks[pos]) {
+    return 0x03FF;
+  }
+
   return mask;
 }
 
