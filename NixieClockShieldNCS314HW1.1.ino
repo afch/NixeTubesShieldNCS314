@@ -195,6 +195,8 @@ ClickButton upButton(pinUp, LOW, CLICKBTN_PULLUP);
 ClickButton downButton(pinDown, LOW, CLICKBTN_PULLUP);
 ///////////////////
 #ifdef INCLUDE_TONES
+unsigned long stopPlaying=0;
+
 Tone tone1;
 #define isdigit(n) (n >= '0' && n <= '9')
 //char *song = "MissionImp:d=16,o=6,b=95:32d,32d#,32d,32d#,32d,32d#,32d,32d#,32d,32d,32d#,32e,32f,32f#,32g,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,g,8p,g,8p,a#,p,c7,p,g,8p,g,8p,f,p,f#,p,a#,g,2d,32p,a#,g,2c#,32p,a#,g,2c,a#5,8c,2p,32p,a#5,g5,2f#,32p,a#5,g5,2f,32p,a#5,g5,2e,d#,8d";
@@ -292,7 +294,6 @@ struct SoftPWM {
   }
 
   void reset(byte onPercent) {
-    Serial.println(onPercent);
     this->onPercent = onPercent;
     isOff = true;
     count = 0;
@@ -593,9 +594,9 @@ void setup()
 #define MIN_DUTY_CYCLE 9
 #define MIN_LED_BRIGHTNESS 3
 
-byte adjustedBrightness;
 int oldLightValue = 0;
 int cumulativeError = 0;
+int lightScale = 100;
 
 void setBrightness() {
   int rawValue = analogRead(pinLS);
@@ -607,6 +608,8 @@ void setBrightness() {
     if (abs(cumulativeError) > MIN_LIGHT_DELTA) {
       cumulativeError = 0;
 
+      lightScale = rawValue * 100 / LIGHT_MAX;
+
       // Scale ratio to a percentage but with a minimum
       int dutyCycle = rawValue * (100 - MIN_DUTY_CYCLE) / LIGHT_MAX + MIN_DUTY_CYCLE;
 
@@ -614,14 +617,11 @@ void setBrightness() {
       dutyCycle = (dutyCycle + MIN_DUTY_CYCLE - 1) / MIN_DUTY_CYCLE * MIN_DUTY_CYCLE;
       displayPWM.setDuty(dutyCycle);
       colonPWM.setDuty(dutyCycle);
-      if (brightness >= MIN_LED_BRIGHTNESS) {
-        adjustedBrightness = (brightness - MIN_LED_BRIGHTNESS) * rawValue / LIGHT_MAX + MIN_LED_BRIGHTNESS;
-      }
     }
   } else {
+    lightScale = 100;
     displayPWM.setDuty(100);
     colonPWM.setDuty(100);
-    adjustedBrightness = brightness;
   }
 }
 
@@ -1124,6 +1124,11 @@ void rotateFireWorks()
   // Approximately 20ms -> 6000ms, or complete cycle time of 6s to 1536s (about 25 mins)
   if ((nowMillis-prevTime4FireWorks)>=(ledCycleTime * 6L * 1000) / 256)
   {
+    byte adjustedBrightness = brightness;
+    if (brightness > MIN_LED_BRIGHTNESS) {
+      adjustedBrightness = (brightness - MIN_LED_BRIGHTNESS) * lightScale / 100 + MIN_LED_BRIGHTNESS;
+    }
+
     prevTime4FireWorks=nowMillis;
     setLedColorHSV(hue, saturation, adjustedBrightness);
     analogWrite(RedLedPin,RedLight);
@@ -1236,7 +1241,7 @@ void doIndication()
   iTmp=var64;
   SPI.transfer(iTmp);
 
-  digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)    
+  digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
   digitalWrite(LEpin, LOW);     // latching data 
 }
 
@@ -1304,8 +1309,10 @@ void doTest()
   Serial.print(F("U input="));
   Serial.print(Uinput);
 #ifdef INCLUDE_TONES
-  //p=song;
+//  p=song;
 //  parseSong(p);
+  // Force disableTimer() to do its job
+  stopPlaying = 1;
   p = 0;
 #endif
    
@@ -1336,16 +1343,16 @@ void doTest()
     if (digitalRead(pinUp)==0) digitsLock=false;
   for (int i=0; i<12; i++)
   {
-   if ((millis()-startOfTest)>dlay) 
+   if ((millis()-startOfTest)>dlay)
    {
      startOfTest=millis();
      if (!digitsLock) strIndex=strIndex+1;
      if (strIndex==10) dlay=3000;
      if (strIndex==12) test=0;
-     
+
      stringToDisplay=testStringArray[strIndex];
      long digits=stringToDisplay.toInt();
-   
+
      unsigned long long var64 = 0;
      unsigned long long tmpVar64 = 0;
      for (int i=50; i >= 0; i -= 10) {
@@ -1357,7 +1364,7 @@ void doTest()
 
     digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
     uint8_t iTmp=0;
-    
+
     iTmp=var64>>56;
     SPI.transfer(iTmp);
     iTmp=var64>>48;
@@ -1374,8 +1381,8 @@ void doTest()
     SPI.transfer(iTmp);
     iTmp=var64;
     SPI.transfer(iTmp);
-      
-    digitalWrite(LEpin, LOW);     // latching data 
+
+    digitalWrite(LEpin, LOW);     // latching data
    }
   }
    delayMicroseconds(2000);
@@ -1397,8 +1404,6 @@ void doDotBlink()
   if (lastTimeBlink != GLOB_TIME[SEC_IDX])
   {
     lastTimeBlink=GLOB_TIME[SEC_IDX];
-    Serial.print("LS=");
-    Serial.println(analogRead(pinLS));
 
     dotState=!dotState;
 
@@ -1631,8 +1636,6 @@ char* parseSong(char *p)
   return p;
 }
 #ifdef INCLUDE_TONES
-unsigned long stopPlaying=0;
-
 void enableTimer() {
   TCCR2A = 0;
   TCCR2B = 0;
