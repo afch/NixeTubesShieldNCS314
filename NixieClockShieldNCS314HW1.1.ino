@@ -302,7 +302,7 @@ struct SoftPWM {
 
 SoftPWM displayPWM(100);
 SoftPWM fadeOutPWM(100);
-SoftPWM fadeInPWM(100);
+SoftPWM fadeInPWM(0);
 SoftPWM colonPWM(100);
 
 struct Transition {
@@ -533,6 +533,7 @@ void setup()
   song=parseSong(song);
 #endif
   pinMode(LEpin, OUTPUT);
+  digitalWrite(LEpin, LOW);     // Initialize latch
   pinMode(DHVpin, OUTPUT);
   
  // SPI setup
@@ -852,7 +853,7 @@ void loop() {
       boolean msgDisplaying = transition.scrollInScrambleOut(nowMillis, Transition::loadTime, Transition::loadDate);
 
       if (!msgDisplaying) {
-        if ((GLOB_TIME[MIN_IDX] % 10) == 0 && (GLOB_TIME[SEC_IDX] >= 0 && GLOB_TIME[SEC_IDX] <= 10)) {
+        if ((GLOB_TIME[MIN_IDX] % 10) == 9 && (GLOB_TIME[SEC_IDX] >= 10 && GLOB_TIME[SEC_IDX] <= 20)) {
           stringToDisplay = oneArmedBandit();
         } else {
           regularDisplay = true;
@@ -1163,11 +1164,7 @@ unsigned long startFade = 0;
 
 void doIndication()
 {
-  digitalWrite(LEpin, LOW);    // allow data input (Transparent mode)
-   
   long digits=stringToDisplay.toInt();
-
-  unsigned long long var64 = ~0;
 
   doEditBlink(0); // Otherwise it is optimized away below!
 
@@ -1194,9 +1191,9 @@ void doIndication()
   boolean fadeOutOff = fadeOutPWM.off();
   boolean displayOff = displayPWM.off();
 
-  var64 = 0;
-  long tmpLastDigits = lastDigits;
+  unsigned long long var64 = 0;
   unsigned long long tmpVar64 = 0;
+  long tmpLastDigits = lastDigits;
   for (int i=50; i >= 0; i -= 10) {
     unsigned int shiftMask = 0x03ff;
     if (!blanks[i/10]) {
@@ -1304,10 +1301,6 @@ void doTest()
   Serial.print(F("Firmware version: "));
   Serial.println(FirmwareVersion.substring(1,2)+"."+FirmwareVersion.substring(2,4));
   Serial.println(F("Start Test"));
-  int adc=analogRead(A3);
-  float Uinput=4.6*(5.0*adc)/1024.0+0.7;
-  Serial.print(F("U input="));
-  Serial.print(Uinput);
 #ifdef INCLUDE_TONES
 //  p=song;
 //  parseSong(p);
@@ -1324,72 +1317,31 @@ void doTest()
   analogWrite(GreenLedPin,0);
   analogWrite(BlueLedPin,255);
   delay(1000); 
-  //while(1);
   
-  String testStringArray[12]={"000000","111111","222222","333333","444444","555555","666666","777777","888888","999999","",""};
-
-  if (Uinput<10) testStringArray[10]="000"+String(int(Uinput*100)); else testStringArray[10]="00"+String(int(Uinput*100));
-  testStringArray[11]=FirmwareVersion;
+  String testStringArray[11]={"000000","111111","222222","333333","444444","555555","666666","777777","888888","999999",FirmwareVersion};
 
   unsigned int dlay=500;
-  bool test=1;
-  byte strIndex=-1;
+  byte strIndex=0;
   unsigned long startOfTest=millis();
   digitalWrite(DHVpin, HIGH);
   bool digitsLock=false;
-  while (test)
+  regularDisplay = true;
+
+  while (strIndex < 11)
   {
+    nowMillis = millis();
+    stringToDisplay = testStringArray[strIndex];
+    doIndication();
     if (digitalRead(pinDown)==0) digitsLock=true;
     if (digitalRead(pinUp)==0) digitsLock=false;
-  for (int i=0; i<12; i++)
-  {
-   if ((millis()-startOfTest)>dlay)
-   {
-     startOfTest=millis();
-     if (!digitsLock) strIndex=strIndex+1;
-     if (strIndex==10) dlay=3000;
-     if (strIndex==12) test=0;
-
-     stringToDisplay=testStringArray[strIndex];
-     long digits=stringToDisplay.toInt();
-
-     unsigned long long var64 = 0;
-     unsigned long long tmpVar64 = 0;
-     for (int i=50; i >= 0; i -= 10) {
-       tmpVar64=SymbolArray[digits%10] | doEditBlink(i/10);
-
-       var64 |= tmpVar64<<i;
-       digits=digits/10;
-     }
-
-    digitalWrite(LEpin, HIGH);    // allow data input (Transparent mode)
-    uint8_t iTmp=0;
-
-    iTmp=var64>>56;
-    SPI.transfer(iTmp);
-    iTmp=var64>>48;
-    SPI.transfer(iTmp);
-    iTmp=var64>>40;
-    SPI.transfer(iTmp);
-    iTmp=var64>>32;
-    SPI.transfer(iTmp);
-    iTmp=var64>>24;
-    SPI.transfer(iTmp);
-    iTmp=var64>>16;
-    SPI.transfer(iTmp);
-    iTmp=var64>>8;
-    SPI.transfer(iTmp);
-    iTmp=var64;
-    SPI.transfer(iTmp);
-
-    digitalWrite(LEpin, LOW);     // latching data
-   }
-  }
-   delayMicroseconds(2000);
+    if ((nowMillis - startOfTest) > dlay) {
+      startOfTest = millis();
+      if (!digitsLock) strIndex++;
+      if (strIndex == 10) dlay = 3000;
+    }
   }; 
 
   Serial.println(F("Stop Test"));
-  
 }
 
 byte savedDotPattern = 0;
