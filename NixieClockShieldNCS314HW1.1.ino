@@ -42,6 +42,7 @@ const String FirmwareVersion="010500";
 
 #ifdef ONE_TWO
 const byte LEpin=10; //pin Latch Enabled data accepted while HI level
+const byte pinLS=A3;
 #else
 const byte LEpin=7; //pin Latch Enabled data accepted while HI level
 #endif
@@ -52,7 +53,6 @@ const byte BlueLedPin=3; //MCU WDM output for blue LEDs 3-r, timer 2 - tone libr
 const byte pinSet=A0;
 const byte pinUp=A2;
 const byte pinDown=A1;
-const byte pinLS=A3;
 const byte pinBuzzer=2;
 const byte pinUpperDots=12; //HIGH value light a dots
 const byte pinLowerDots=8;  //HIGH value light a dots
@@ -600,6 +600,7 @@ int cumulativeError = 0;
 int lightScale = 100;
 
 void setBrightness() {
+#ifdef ONE_TWO
   int rawValue = analogRead(pinLS);
 
   if (rawValue < LIGHT_MAX) {
@@ -624,6 +625,7 @@ void setBrightness() {
     displayPWM.setDuty(100);
     colonPWM.setDuty(100);
   }
+#endif
 }
 
 byte RedLight=255;
