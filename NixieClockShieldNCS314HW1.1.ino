@@ -1,4 +1,4 @@
-const String FirmwareVersion="010500";
+const String FirmwareVersion="010600";
 //Format                _X.XX__    
 //NIXIE CLOCK SHIELD NCS314 by GRA & AFCH (fominalec@gmail.com)
 //1.05
