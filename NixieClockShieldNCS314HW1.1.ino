@@ -168,9 +168,9 @@ unsigned int GLOB_TIME[4] = {0, 0, 0, 0};
 #define SEC_IDX 2
 #define MS_IDX 3
 
-long downTime=0;
-long upTime=0;
-const long settingDelay=150;
+unsigned long downTime=0;
+unsigned long upTime=0;
+const unsigned long settingDelay=150;
 bool BlinkUp=false;
 bool BlinkDown=false;
 unsigned long enteringEditModeTime=0;
@@ -323,7 +323,7 @@ struct Transition {
     this->end = 0;
   }
 
-  void start(long now) {
+  void start(unsigned long now) {
     if (end < now) {
       this->started = now;
       this->end = getEnd();
@@ -331,7 +331,7 @@ struct Transition {
     // else we are already running!
   }
 
-  boolean scrollMsg(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  boolean scrollMsg(unsigned long now, void (*loadRegularValues)(), void (*loadMessageValues)())
   {
     if (now < end) {
       int msCount = now - started;
@@ -361,7 +361,7 @@ struct Transition {
     return false;   // We aren't running
   }
 
-  boolean scrambleMsg(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  boolean scrambleMsg(unsigned long now, void (*loadRegularValues)(), void (*loadMessageValues)())
   {
     if (now < end) {
       int msCount = now - started;
@@ -387,7 +387,7 @@ struct Transition {
     return false;   // We aren't running
   }
 
-  boolean scrollInScrambleOut(long now, void (*loadRegularValues)(), void (*loadMessageValues)())
+  boolean scrollInScrambleOut(unsigned long now, void (*loadRegularValues)(), void (*loadMessageValues)())
   {
     if (now < end) {
       int msCount = now - started;
@@ -444,7 +444,7 @@ struct Transition {
     return count;
   }
 
-  static long hash(long x) {
+  static unsigned long hash(unsigned long x) {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = ((x >> 16) ^ x) * 0x45d9f3b;
     x = (x >> 16) ^ x;
@@ -468,14 +468,14 @@ protected:
   int effectInDuration; // How long an effect should take in ms
   int effectOutDuration; // How long an effect should take in ms
   int holdDuration;   // How long the message should be displayed for in ms
-  long started;       // When we were started (timestamp)
-  long end;           // When the whole thing will end (timestamp)
+  unsigned long started;       // When we were started (timestamp)
+  unsigned long end;           // When the whole thing will end (timestamp)
 
   /**
    * The end time has to match what displayMessage() wants,
    * so let sub-classes override it.
    */
-  long getEnd() {
+  unsigned long getEnd() {
     return started + effectInDuration * 2 + holdDuration + effectOutDuration * 2;
   }
 };
@@ -592,34 +592,29 @@ void setup()
 #define LIGHT_MAX 150
 #define MIN_LIGHT_DELTA 5
 #define MAX_LIGHT_DELTA 20
-#define MIN_DUTY_CYCLE 9
+#define MIN_DUTY_CYCLE 10
 #define MIN_LED_BRIGHTNESS 3
 
-int oldLightValue = 0;
-int cumulativeError = 0;
 int lightScale = 100;
+double sensorLDRSmoothed = 0.0;
+double sensorSmoothCountLDR = 100;
 
 void setBrightness() {
 #ifdef ONE_TWO
   int rawValue = analogRead(pinLS);
+  double sensorDiff = rawValue - sensorLDRSmoothed;
+  sensorLDRSmoothed += (sensorDiff/sensorSmoothCountLDR);
 
-  if (rawValue < LIGHT_MAX) {
-    cumulativeError += oldLightValue - rawValue;
-    oldLightValue = rawValue;
-
-    if (abs(cumulativeError) > MIN_LIGHT_DELTA) {
-      cumulativeError = 0;
-
-      lightScale = rawValue * 100 / LIGHT_MAX;
+  if (sensorLDRSmoothed < LIGHT_MAX) {
+      lightScale = sensorLDRSmoothed * 100 / LIGHT_MAX;
 
       // Scale ratio to a percentage but with a minimum
-      int dutyCycle = rawValue * (100 - MIN_DUTY_CYCLE) / LIGHT_MAX + MIN_DUTY_CYCLE;
+      int dutyCycle = sensorLDRSmoothed * (100 - MIN_DUTY_CYCLE) / LIGHT_MAX + MIN_DUTY_CYCLE;
 
       // Quantize the duty cycle
       dutyCycle = (dutyCycle + MIN_DUTY_CYCLE - 1) / MIN_DUTY_CYCLE * MIN_DUTY_CYCLE;
       displayPWM.setDuty(dutyCycle);
       colonPWM.setDuty(dutyCycle);
-    }
   } else {
     lightScale = 100;
     displayPWM.setDuty(100);
@@ -1149,7 +1144,7 @@ void rotateFireWorks()
 }
 
 String oneArmedBandit() {
-  static long lastTime = 0;
+  static unsigned long lastTime = 0;
 
   if (nowMillis - lastTime > 100) {
     lastTime = nowMillis;
