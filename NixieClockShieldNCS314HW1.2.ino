@@ -1,6 +1,8 @@
-const String FirmwareVersion="010210";
+const String FirmwareVersion="010310";
 //Format                _X.XXX_    
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
+//1.0.31 27_04_2017
+//Added: antipoisoning effect - slot machine
 //1.021 31.01.2017
 //Added: time synchronizing each 10 seconds
 //Fixed: not correct time reading from RTC while start up
@@ -159,6 +161,13 @@ int functionDownButton=0;
 int functionUpButton=0;
 bool LEDsLock=false;
 
+//antipoisoning transaction 
+bool modeChangedByUser=false;
+bool transactionInProgress=false; //antipoisoning transaction 
+#define timeModePeriod 60000
+#define dateModePeriod 5000
+long modesChangePeriod=timeModePeriod;
+//end of antipoisoning transaction 
 /*******************************************************************************************************
 Init Programm
 *******************************************************************************************************/
@@ -283,7 +292,8 @@ void loop() {
     rotateFireWorks(); //change color (by 1 step)
     prevTime4FireWorks=millis();
   }
-    
+
+  if ((menuPosition==TimeIndex) || (modeChangedByUser==false) ) modesChanger();  
   doIndication();
   
   setButton.Update();
@@ -301,6 +311,7 @@ void loop() {
     }
   if (setButton.clicks>0) //short click
     {
+      modeChangedByUser=true;
       p=0; //shut off music )))
       tone1.play(1000,100);
       enteringEditModeTime=millis();
@@ -350,6 +361,7 @@ void loop() {
    
   if (upButton.clicks>0) 
     {
+      modeChangedByUser=true;
       p=0; //shut off music )))
       tone1.play(1000,100);
       incrementValue();
@@ -377,6 +389,7 @@ void loop() {
   
   if (downButton.clicks>0) 
     {
+      modeChangedByUser=true;
       p=0; //shut off music )))
       tone1.play(1000,100);
       dicrementValue();
@@ -421,18 +434,17 @@ void loop() {
       Serial.println("RGB=off");
     }
   }
-  
-    
+      
   static bool updateDateTime=false;
   switch (menuPosition)
   {
     case TimeIndex: //time mode
-       stringToDisplay=updateDisplayString();
+       if (!transactionInProgress) stringToDisplay=updateDisplayString();
        doDotBlink();
        checkAlarmTime();
        break;
     case DateIndex: //date mode
-      stringToDisplay=PreZero(day())+PreZero(month())+PreZero(year()%1000);
+      if (!transactionInProgress) stringToDisplay=updateDateString();
       dotPattern=B01000000;//turn on lower dots
       /*digitalWrite(pinUpperDots, LOW);
       digitalWrite(pinLowerDots, HIGH);*/
@@ -588,14 +600,16 @@ String updateDisplayString()
   static  unsigned long lastTimeStringWasUpdated;
   if ((millis()-lastTimeStringWasUpdated)>1000)
   {
-    //Serial.println("doDotBlink");
-    //doDotBlink();
     lastTimeStringWasUpdated=millis();
-    if (value[hModeValueIndex]==24) return PreZero(hour())+PreZero(minute())+PreZero(second());
-      else return PreZero(hourFormat12())+PreZero(minute())+PreZero(second());
-    
+    return getTimeNow();
   }
   return stringToDisplay;
+}
+
+String getTimeNow()
+{
+  if (value[hModeValueIndex]==24) return PreZero(hour())+PreZero(minute())+PreZero(second());
+      else return PreZero(hourFormat12())+PreZero(minute())+PreZero(second());
 }
 
 void doTest()
@@ -1074,4 +1088,77 @@ void setLEDsFromEEPROM()
   digitalWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));
 }
 
+void modesChanger()
+{
+  if (editMode==true) return;
+  static unsigned long lastTimeModeChanged=millis();
+  static unsigned long lastTimeAntiPoisoningIterate=millis();
+  if ((millis()-lastTimeModeChanged)>modesChangePeriod) 
+  {
+    lastTimeModeChanged=millis();
+    if (menuPosition==TimeIndex) {menuPosition=DateIndex; modesChangePeriod=dateModePeriod;}
+      else {menuPosition=TimeIndex; modesChangePeriod=timeModePeriod;}
+    if (modeChangedByUser==true) 
+    {
+      menuPosition=TimeIndex;
+    }
+    modeChangedByUser=false;
+  }
+  if ((millis()-lastTimeModeChanged)<2000) 
+  {
+    if ((millis()-lastTimeAntiPoisoningIterate)>100)  
+    {
+      lastTimeAntiPoisoningIterate=millis();
+      if (menuPosition==TimeIndex)
+        stringToDisplay=antiPoisoning2(PreZero(day())+PreZero(month())+PreZero(year()%1000), getTimeNow());
+      else stringToDisplay=antiPoisoning2(getTimeNow(), PreZero(day())+PreZero(month())+PreZero(year()%1000));
+     // Serial.println("StrTDInToModeChng="+stringToDisplay);
+    }
+  } else transactionInProgress=false;
+}
 
+String antiPoisoning2(String fromStr, String toStr)
+{
+  //static bool transactionInProgress=false;
+  //byte fromDigits[6];
+  static byte toDigits[6];
+  static byte currentDigits[6];
+  static byte iterationCounter=0;
+  if (!transactionInProgress) 
+  {
+    transactionInProgress=true;
+    for (int i=0; i<6; i++)
+    {
+      currentDigits[i]=fromStr.substring(i, i+1).toInt();
+      toDigits[i]=toStr.substring(i, i+1).toInt();
+    }
+  }
+  for (int i=0; i<6; i++)
+  {
+    if (iterationCounter<10) currentDigits[i]++;
+      else if (currentDigits[i]!=toDigits[i]) currentDigits[i]++;
+    if (currentDigits[i]==10) currentDigits[i]=0;
+  }
+  iterationCounter++;
+  if (iterationCounter==20)
+  {
+    iterationCounter=0;
+    transactionInProgress=false;
+  }
+  String tmpStr;
+  for (int i=0; i<6; i++)
+    tmpStr+=currentDigits[i];
+  return tmpStr;
+}
+
+String updateDateString()
+{
+  static unsigned long lastTimeDateUpdate=millis();
+  static String DateString=PreZero(day())+PreZero(month())+PreZero(year()%1000);
+  if ((millis()-lastTimeDateUpdate)>1000) 
+  {
+    lastTimeDateUpdate=millis();
+    DateString=PreZero(day())+PreZero(month())+PreZero(year()%1000); 
+  }
+ return DateString;
+}
