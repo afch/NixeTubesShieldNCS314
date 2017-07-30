@@ -1,6 +1,8 @@
-const String FirmwareVersion = "016000";
+const String FirmwareVersion = "017000";
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
+//1.70   30.07.2017
+//Added  IR remote control support (Sony RM-X151) ("MODE", "UP", "DOWN")
 //1.60   24_07_2017
 //Added: Temperature reading mode in menu and slot machine transaction
 //1.0.31 27_04_2017
@@ -24,12 +26,88 @@ const String FirmwareVersion = "016000";
 #include <Tone.h>
 #include <EEPROM.h>
 #include <OneWire.h>
+//IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 #include <IRremote.h>
 int RECV_PIN = 4;
 IRrecv irrecv(RECV_PIN);
-decode_results results;
+decode_results IRresults;
+// buttons codes for remote controller Sony RM-X151
+#define IR_BUTTON_UP_CODE 0x6621
+#define IR_BUTTON_DOWN_CODE 0x2621
+#define IR_BUTTON_MODE_CODE 0x7121
+
+class IRButtonState
+{
+  public:
+    int PAUSE_BETWEEN_PACKETS = 50;
+    int PACKETS_QTY_IN_LONG_PRESS = 18;
+
+  private:
+    bool Flag = 0;
+    byte CNT_packets = 0;
+    unsigned long lastPacketTime = 0;
+    bool START_TIMER = false;
+    int _buttonCode;
+
+  public: IRButtonState::IRButtonState(int buttonCode)
+    {
+      _buttonCode = buttonCode;
+    }
+
+  public: int IRButtonState::checkButtonState(int receivedCode)
+    {
+      if (((millis() - lastPacketTime) > PAUSE_BETWEEN_PACKETS) && (START_TIMER == true))
+      {
+        START_TIMER = false;
+        if (CNT_packets >= 2) {
+          Flag = 0;
+          CNT_packets = 0;
+          START_TIMER = false;
+          return 1;
+        }
+        else {
+          Flag = 0;
+          CNT_packets = 0;
+          return 0;
+        }
+      }
+      else
+      {
+        if (receivedCode == _buttonCode) { Flag = 1;}
+        else
+        {
+          if (!(Flag == 1)) {return 0;}
+          else
+          {
+            if (!(receivedCode == 0xFFFFFFFF)) {return 0;}
+          }
+        }
+        CNT_packets++;
+        lastPacketTime = millis();
+        START_TIMER = true;
+        if (CNT_packets >= PACKETS_QTY_IN_LONG_PRESS) {
+          Flag = 0;
+          CNT_packets = 0;
+          START_TIMER = false;
+          return -1;
+        }
+        else {return 0;}
+      }
+    }
+};
+
+IRButtonState IRModeButton(IR_BUTTON_MODE_CODE);
+IRButtonState IRUpButton(IR_BUTTON_UP_CODE);
+IRButtonState IRDownButton(IR_BUTTON_DOWN_CODE);
 #endif
+
+
+int ModeButtonState = 0;
+int UpButtonState = 0;
+int DownButtonState = 0;
+
+//IR remote control /////////// START /////////////////////////////
 
 byte data[12];
 byte addr[8];
@@ -301,10 +379,27 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 ***************************************************************************************************************/
 void loop() {
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-  if (irrecv.decode(&results)) {
-    Serial.println(results.value, HEX);
+  IRresults.value = 0;
+  if (irrecv.decode(&IRresults)) {
+    Serial.println(IRresults.value, HEX);
     irrecv.resume(); // Receive the next value
   }
+
+  ModeButtonState = IRModeButton.checkButtonState(IRresults.value);
+  if (ModeButtonState == 1) Serial.println("Mode short");
+  if (ModeButtonState == -1) Serial.println("Mode long....");
+
+  UpButtonState = IRUpButton.checkButtonState(IRresults.value);
+  if (UpButtonState == 1) Serial.println("Up short");
+  if (UpButtonState == -1) Serial.println("Up long....");
+
+  DownButtonState = IRDownButton.checkButtonState(IRresults.value);
+  if (DownButtonState == 1) Serial.println("Down short");
+  if (DownButtonState == -1) Serial.println("Down long....");
+#else
+  ModeButtonState=0;
+  UpButtonState=0;
+  DownButtonState=0;
 #endif
 
   if (((millis() % 10000) == 0) && (RTC_present)) //synchronize with RTC every 10 seconds
@@ -338,7 +433,7 @@ void loop() {
     menuPosition = firstChild[menuPosition];
     blinkMask = blinkPattern[menuPosition];
   }
-  if (setButton.clicks > 0) //short click
+  if ((setButton.clicks > 0) || (ModeButtonState == 1)) //short click
   {
     modeChangedByUser = true;
     p = 0; //shut off music )))
@@ -380,7 +475,7 @@ void loop() {
     } //end exit from edit mode
     value[menuPosition] = extractDigits(blinkMask);
   }
-  if (setButton.clicks < 0) //long click
+  if ((setButton.clicks < 0) || (ModeButtonState == -1)) //long click
   {
     tone1.play(1000, 100);
     if (!editMode)
@@ -400,7 +495,7 @@ void loop() {
 
   if (upButton.clicks != 0) functionUpButton = upButton.clicks;
 
-  if (upButton.clicks > 0)
+  if ((upButton.clicks > 0) || (UpButtonState == 1))
   {
     modeChangedByUser = true;
     p = 0; //shut off music )))
@@ -428,7 +523,7 @@ void loop() {
 
   if (downButton.clicks != 0) functionDownButton = downButton.clicks;
 
-  if (downButton.clicks > 0)
+  if ((downButton.clicks > 0) || (DownButtonState == 1))
   {
     modeChangedByUser = true;
     p = 0; //shut off music )))
@@ -459,7 +554,7 @@ void loop() {
 
   if (!editMode)
   {
-    if (upButton.clicks < 0)
+    if ((upButton.clicks < 0) || (UpButtonState == -1))
     {
       tone1.play(1000, 100);
       RGBLedsOn = true;
@@ -467,7 +562,7 @@ void loop() {
       Serial.println(F("RGB=on"));
       setLEDsFromEEPROM();
     }
-    if (downButton.clicks < 0)
+    if ((downButton.clicks < 0) || (DownButtonState == -1))
     {
       tone1.play(1000, 100);
       RGBLedsOn = false;
@@ -529,8 +624,8 @@ void loop() {
       if (getTemperature(value[DegreesFormatIndex]) < 0) dotPattern |= B10000000;
       else dotPattern &= B01111111;
       break;
-
   }
+//  IRresults.value=0;
 }
 
 String PreZero(int digit)
