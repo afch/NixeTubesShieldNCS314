@@ -23,8 +23,6 @@ https://youtu.be/DQZWPn0iAHw
 
 	Nixie Clock Shield for Arduino - NCS314 (Hardware Versions: HW1.0, HW1.1, HW1.2, HW2.0)
 	
-	NCM 107 is compatible with NCT 3xx, NCT 4xx series and NCT3566, NCT3573 tubes boards.
-
 3. eBay stores:
 First (gra_and_afch) - https://www.ebay.com/sch/gra_and_afch/m.html?_nkw=&_armrs=1
 Second (gra_and_afch_2) - http://stores.ebay.com/graandafch2/
