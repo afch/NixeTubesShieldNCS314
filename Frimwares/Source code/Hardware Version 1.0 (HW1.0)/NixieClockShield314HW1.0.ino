@@ -6,7 +6,7 @@ const String FirmwareVersion="010000";
 #include <SPI.h>
 #include <Wire.h>
 #include <ClickButton.h>
-#include <Time.h>
+#include <TimeLib.h>
 #include <Tone.h>
 #include <EEPROM.h>
 
