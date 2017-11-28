@@ -577,7 +577,7 @@ String updateDisplayString()
 
 
     /* CHANGE */
-    This part reads from Serial a string, say 112233 for 11:22:33
+    /* This part reads from Serial a string, say 112233 for 11:22:33 */
     String IncomingData = "";
     while(Serial.available())
     {
