@@ -30,6 +30,15 @@ const byte pinUpperDots=12; //HIGH value light a dots
 const byte pinLowerDots=8;  //HIGH value light a dots
 const word fpsLimit=16666; // 1/60*1.000.000 //limit maximum refresh rate on 60 fps
 
+/* CHANGES */
+/* Counter used to figure out if RTC neesd to be updated. If the USB Serial is being used to read the time over and over again, theres no reason to setRTCDateTime() every time. So this is used to do it once every 60 times */
+int updateRTCCounter;
+/* Boolean to keep track of whether or not the last time updateDisplayString() using USB Serial input, or not */
+bool lastUpdatedByNTP;
+
+String Temp = "";
+char var;
+
 String stringToDisplay="000000";// Conten of this string will be displayed on tubes (must be 6 chars length)
 int menuPosition=0; // 0 - time
                     // 1 - date
@@ -151,6 +160,7 @@ Init Programm
 *******************************************************************************************************/
 void setup() 
 {
+  int updateRTCCounter = 0;
   digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
    
   Wire.begin();
@@ -160,8 +170,16 @@ void setup()
   
     if (EEPROM.read(HourFormatEEPROMAddress)!=12) value[hModeValueIndex]=24; else value[hModeValueIndex]=12;
     if (EEPROM.read(RGBLEDsEEPROMAddress)!=0) RGBLedsOn=true; else RGBLedsOn=false;
-    if (EEPROM.read(AlarmTimeEEPROMAddress)==255) value[AlarmHourIndex]=0; else value[AlarmHourIndex]=EEPROM.read(AlarmTimeEEPROMAddress);
-    if (EEPROM.read(AlarmTimeEEPROMAddress+1)==255) value[AlarmMinuteIndex]=0; else value[AlarmMinuteIndex]=EEPROM.read(AlarmTimeEEPROMAddress+1);
+    if (EEPROM.read(AlarmTimeEEPROMAddress)==255) {
+        value[AlarmHourIndex]=0;
+    } else {
+        value[AlarmHourIndex]=EEPROM.read(AlarmTimeEEPROMAddress);
+    } 
+    if (EEPROM.read(AlarmTimeEEPROMAddress+1)==255) {
+        value[AlarmMinuteIndex]=0;
+    } else {
+        value[AlarmMinuteIndex]=EEPROM.read(AlarmTimeEEPROMAddress+1);
+    } 
     if (EEPROM.read(AlarmTimeEEPROMAddress+2)==255) value[AlarmSecondIndex]=0; else value[AlarmSecondIndex]=EEPROM.read(AlarmTimeEEPROMAddress+2);
     if (EEPROM.read(AlarmArmedEEPROMAddress)==255) value[Alarm01]=0; else value[Alarm01]=EEPROM.read(AlarmArmedEEPROMAddress);
     if (EEPROM.read(LEDsLockEEPROMAddress)==255) LEDsLock=false; else LEDsLock=EEPROM.read(LEDsLockEEPROMAddress);
@@ -241,7 +259,7 @@ MAIN Programm
 ***************************************************************************************************************/
 void loop() {
   
-  p=playmusic(p);
+  /* p=playmusic(p); */
   
   if ((millis()-prevTime4FireWorks)>5)
   {
@@ -556,9 +574,61 @@ String updateDisplayString()
     //Serial.println("doDotBlink");
     //doDotBlink();
     lastTimeStringWasUpdated=millis();
-    if (value[hModeValueIndex]==24) return PreZero(hour())+PreZero(minute())+PreZero(second());
-      else return PreZero(hourFormat12())+PreZero(minute())+PreZero(second());
-    
+
+
+    /* CHANGE */
+    /* This part reads from Serial a string, say 112233 for 11:22:33 */
+    String IncomingData = "";
+    while(Serial.available())
+    {
+        var = Serial.read();
+        IncomingData += String(var);
+    }
+
+    /* Split the string IncomingData into hours, minutes, seconds substring */
+    byte hours = (IncomingData.substring(0, 2).toInt());
+    byte minutes = (IncomingData.substring(2, 4).toInt());
+    byte seconds = (IncomingData.substring(4, 6).toInt());
+
+
+    /* If Serial USB data can't be detected, just use the normal mechanism to get the next hour. */
+    if (IncomingData == "") {
+        /* In case USB Serial connection is established, and the program starts to read from it the next time this function gets called, set lastUpdatedByNTP to be false so that that function knows USB Serial based time updating was disabled until this point */
+        lastUpdatedByNTP = false;
+        if (value[hModeValueIndex]==24) return PreZero(hour())+PreZero(minute())+PreZero(second());
+          else return PreZero(hourFormat12())+PreZero(minute())+PreZero(second());
+    } else {
+        /* Serial.println("hours: " + hours); */
+        /* Serial.println("minutes: " + minutes); */
+        /* Serial.println("seconds: " + seconds); */
+
+        /*Add a 60 second counter to make sure the clock's setRTCDateTime()) doesn't have to be run more than once a minute. */
+        if (updateRTCCounter < 60) {
+            /* If the last time updateDisplayString() was run did not run a running serial USB based update, assume the Clock was running on RTC this whole time and needs to update the RTC modeule using setRTCDateTime */
+            if (!lastUpdatedByNTP) {
+                /* Send new values for hours, minutes seconds while keeping the rest of the variables the same (since as long as hours:minutes:seconds is accurate, so will the RTC_day, RTC_year, and RTC_day_of_week) */
+                setRTCDateTime(hours, minutes, seconds, RTC_day, RTC_month, RTC_year, RTC_day_of_week);
+                /* Update the values of RTC_hours, RTC_minutes, RTC_seconds from the newly updated RTC moddule */
+                getRTCTime();
+                /* Reset counter to 0 since we just updated RTC */
+                updateRTCCounter = 0;
+            } else {
+                /* Since the Serial USB method of updating the clock time has been running and the program has updated the RTC clock less than a minute ago, then all we have to do is increment the updateRTCCounter */
+                updateRTCCounter = updateRTCCounter + 1;
+            }
+        /* If it has been 60 seconds since the last time the RTC module was updated with the lastest time, update the latest time to RTC*/
+        } else {
+            /* Send new values for hours, minutes seconds while keeping the rest of the variables the same (since as long as hours:minutes:seconds is accurate, so will the RTC_day, RTC_year, and RTC_day_of_week) */
+            setRTCDateTime(hours, minutes, seconds, RTC_day, RTC_month, RTC_year, RTC_day_of_week);
+            /* Update the values of RTC_hours, RTC_minutes, RTC_seconds from the newly updated RTC moddule */
+            getRTCTime();
+            /* Reset counter to 0 since we just updated RTC */
+            updateRTCCounter = 0;
+        }
+        /* update lastUpdatedByNTP every time the updateDisplayString() runs using the serial USB method rather than RTC */
+        lastUpdatedByNTP = true;
+        return IncomingData;
+    }
   }
   return stringToDisplay;
 }
@@ -573,8 +643,8 @@ void doTest()
   Serial.print(F("U input="));
   Serial.print(Uinput);
   
-  p=song;
-  parseSong(p);
+  /* p=song; */
+  /* parseSong(p); */
    
   analogWrite(RedLedPin,255);
   delay(1000);
@@ -698,6 +768,13 @@ void doDotBlink()
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
 {
+  Serial.println(h);
+  Serial.println(m);
+  Serial.println(s);
+  Serial.println(d);
+  Serial.println(m);
+  Serial.println(y);
+  Serial.println(w);
   Wire.beginTransmission(DS1307_ADDRESS);
   Wire.write(zero); //stop Oscillator
 
@@ -733,13 +810,20 @@ void getRTCTime()
 
   Wire.requestFrom(DS1307_ADDRESS, 7);
 
-  RTC_seconds = bcdToDec(Wire.read());
-  RTC_minutes = bcdToDec(Wire.read());
-  RTC_hours = bcdToDec(Wire.read() & 0b111111); //24 hour time
-  RTC_day_of_week = bcdToDec(Wire.read()); //0-6 -> sunday - Saturday
-  RTC_day = bcdToDec(Wire.read());
-  RTC_month = bcdToDec(Wire.read());
-  RTC_year = bcdToDec(Wire.read());
+  byte nonConvRTC_seconds = Wire.read();
+  byte nonConvRTC_minutes = Wire.read();
+  byte nonConvRTC_hours = Wire.read() & 0b111111; //24 hour time
+  byte nonConvRTC_day_of_week = Wire.read(); //0-6 -> sunday - Saturday
+  byte nonConvRTC_day = Wire.read();
+  byte nonConvRTC_month = Wire.read();
+  byte nonConvRTC_year = Wire.read();
+  RTC_seconds = bcdToDec(nonConvRTC_seconds);
+  RTC_minutes = bcdToDec(nonConvRTC_minutes);
+  RTC_hours =  bcdToDec(nonConvRTC_hours);
+  RTC_day_of_week = bcdToDec(nonConvRTC_day_of_week);
+  RTC_day = bcdToDec(nonConvRTC_day);
+  RTC_month = bcdToDec(nonConvRTC_month);
+  RTC_year = bcdToDec(nonConvRTC_year);
 }
 
 word doEditBlink(int pos)
@@ -1027,7 +1111,7 @@ void checkAlarmTime()
      lastTimeAlarmTriggired=millis();
      Alarm1SecondBlock=true;
      Serial.println(F("Wake up, Neo!"));
-     p=song;
+     /* p=song; */
    }
 }
 
