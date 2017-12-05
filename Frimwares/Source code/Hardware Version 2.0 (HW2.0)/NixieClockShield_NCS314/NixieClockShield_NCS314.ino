@@ -1,4 +1,5 @@
 const String FirmwareVersion = "018000";
+#define HardwareVersion "NCS314 for HW 2.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
 //1.80   06.08.2017
@@ -311,7 +312,9 @@ void setup()
   //setRTCDateTime(23,40,00,25,7,15,1);
 
   Serial.begin(115200);
+  #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
   Serial1.begin(9600);
+  #endif
 
   if (EEPROM.read(HourFormatEEPROMAddress) != 12) value[hModeValueIndex] = 24; else value[hModeValueIndex] = 12;
   if (EEPROM.read(RGBLEDsEEPROMAddress) != 0) RGBLedsOn = true; else RGBLedsOn = false;
@@ -412,9 +415,23 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 ***************************************************************************************************************/
 void loop() {
 
-GetDataFromSerial1();
+    if (((millis() % 10000) == 0) && (RTC_present)) //synchronize with RTC every 10 seconds
+  {
+    getRTCTime();
+    setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
+    Serial.println(F("Sync"));
+  }
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+
+  GetDataFromSerial1();
+
+  if ((millis() % 10001) == 0) //synchronize with GPS every 10 seconds
+  {
+    SyncWithGPS();
+    Serial.println(F("Sync from GPS"));
+  }
+  
   IRresults.value = 0;
   if (irrecv.decode(&IRresults)) {
     Serial.println(IRresults.value, HEX);
@@ -437,20 +454,6 @@ GetDataFromSerial1();
   UpButtonState=0;
   DownButtonState=0;
 #endif
-
-  if (((millis() % 10000) == 0) && (RTC_present)) //synchronize with RTC every 10 seconds
-  {
-    getRTCTime();
-    setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
-    Serial.println(F("Sync"));
-  }
-
-  if ((millis() % 10001) == 0) //synchronize with GPS every 10 seconds
-  {
-    SyncWithGPS();
-    Serial.println(F("Sync from GPS"));
-  }
-  
 
   p = playmusic(p);
 
@@ -483,6 +486,9 @@ GetDataFromSerial1();
     tone1.play(1000, 100);
     enteringEditModeTime = millis();
     menuPosition = menuPosition + 1;
+    #if defined (__AVR_ATmega328P__)
+      if (menuPosition == TimeZoneIndex) menuPosition++;// skip TimeZone for Arduino Uno
+    #endif
     if (menuPosition == LastParent + 1) menuPosition = TimeIndex;
     Serial.print(F("menuPosition="));
     Serial.println(menuPosition);
@@ -736,6 +742,7 @@ void doTest()
 {
   Serial.print(F("Firmware version: "));
   Serial.println(FirmwareVersion.substring(1,2)+"."+FirmwareVersion.substring(2,5));
+  Serial.println(HardwareVersion);
   Serial.println(F("Start Test"));
   
   p=song;
@@ -1255,6 +1262,8 @@ word blankDigit(int pos)
   return mask;
 }
 
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+
 void SyncWithGPS()
 {
   static unsigned long Last_Time_GPS_Sync=0;
@@ -1385,3 +1394,5 @@ uint8_t ControlCheckSum()
   //Serial.println("Checksum is ok");
   return 1; // all ok!
 }
+
+#endif
