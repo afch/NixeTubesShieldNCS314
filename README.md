@@ -1,5 +1,5 @@
-# NixeTubesShieldNCS314
-Sketch for Arduino UNO and Nixie Tubes Shield NCS314 by GRA &amp; AFCH
+# Nixe Tubes Shield NCS314 and NCS312
+Sketch for Arduino UNO and Nixie Tubes Shield NCS314 and NCS312 by GRA &amp; AFCH
 1. This repository content sources of project for Nixie Clock developed by GRA & AFCH.
 
 	Folders description:
@@ -21,10 +21,11 @@ https://youtu.be/DQZWPn0iAHw
 
 3. Compatibility:
 
-	Nixie Clock Shield for Arduino - NCS314 (Hardware Versions: HW1.0, HW1.1, HW1.2, HW2.0)
+	Nixie Clock Shield for Arduino - <b>NCS314</b> (Hardware Versions: HW1.0, HW1.1, HW1.2, HW2.0) <br>
+	Nixie Clock Shield for Arduino - <b>NCS312</b> (Hardware Versions: HW1.3) - use the firmware for NCS314 version 2.0
 	
 3. eBay stores:
-First (gra_and_afch) - https://www.ebay.com/sch/gra_and_afch/m.html?_nkw=&_armrs=1
+First (gra_and_afch) - https://www.ebay.com/sch/gra_and_afch/m.html?_nkw=&_armrs=1 <br>
 Second (gra_and_afch_2) - http://stores.ebay.com/graandafch2/
 
 4. Our own on-line store: http://gra-afch.com
