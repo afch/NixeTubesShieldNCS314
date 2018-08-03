@@ -1,6 +1,8 @@
 //driver for NCM107+NCT318+NCT818, NCS312, NCS314 HW2.x (registers HV5122)
-//driver version 1.0
+//driver version 1.1
 //1 on register's output will turn on a digit 
+
+//v1.1 Mixed up on/off for dots
 
 #include "doIndication314_HW2.x.h"
 
@@ -35,11 +37,11 @@ void doIndication()
   Var32 |= (unsigned long)SymbolArray[digits%10]&doEditBlink(6);//y1
   digits=digits/10;
 
-  if (LD) Var32&=~LowerDotsMask;
-    else  Var32|=LowerDotsMask;
+  if (LD) Var32|=LowerDotsMask;
+    else  Var32&=~LowerDotsMask;
   
-  if (UD) Var32&=~UpperDotsMask; 
-    else  Var32|=UpperDotsMask; 
+  if (UD) Var32|=UpperDotsMask;
+    else Var32&=~UpperDotsMask;  
     
   SPI.transfer(Var32>>24);
   SPI.transfer(Var32>>16);
@@ -59,11 +61,11 @@ void doIndication()
   Var32|=(unsigned long) (SymbolArray[digits%10]&doEditBlink(3)); //m2
   digits=digits/10;
 
-  if (LD) Var32&=~LowerDotsMask;
-    else  Var32|=LowerDotsMask;
+  if (LD) Var32|=LowerDotsMask;
+    else  Var32&=~LowerDotsMask;
   
-  if (UD) Var32&=~UpperDotsMask; 
-    else  Var32|=UpperDotsMask; 
+  if (UD) Var32|=UpperDotsMask;
+    else Var32&=~UpperDotsMask;  
 
   SPI.transfer(Var32>>24);
   SPI.transfer(Var32>>16);
@@ -83,11 +85,11 @@ void doIndication()
   Var32|= (unsigned long)SymbolArray[digits%10]&doEditBlink(0); //h1
   digits=digits/10;
 
-  if (LD) Var32&=~LowerDotsMask;  
-    else  Var32|=LowerDotsMask;
+  if (LD) Var32|=LowerDotsMask;
+    else  Var32&=~LowerDotsMask;
   
-  if (UD) Var32&=~UpperDotsMask; 
-    else  Var32|=UpperDotsMask; 
+  if (UD) Var32|=UpperDotsMask;
+    else Var32&=~UpperDotsMask;  
      
   SPI.transfer(Var32>>24);
   SPI.transfer(Var32>>16);
@@ -130,6 +132,15 @@ word doEditBlink(int pos)
   if ((blinkState==true) && (lowBit==1)) mask=0x3C00;//mask=B11111111;
   //Serial.print("doeditblinkMask=");
   //Serial.println(mask, BIN);
+  return mask;
+}
+
+word blankDigit(int pos)
+{
+  int lowBit = blankMask >> pos;
+  lowBit = lowBit & B00000001;
+  word mask = 0;
+  if (lowBit == 1) mask = 0xFFFF;
   return mask;
 }
 

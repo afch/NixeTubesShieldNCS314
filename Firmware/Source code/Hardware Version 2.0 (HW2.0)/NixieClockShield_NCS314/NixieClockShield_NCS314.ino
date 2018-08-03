@@ -1,8 +1,13 @@
- const String FirmwareVersion = "018200";
+ const String FirmwareVersion = "018300";
 #define HardwareVersion "NCS314 for HW 2.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
-//1.82  18.03.2018 Dual Date Format
+//1.83  02.08.2018 (Driver v 1.1 is required)
+//Fixed: Temp. reading speed fixed
+//Fixed: Dots mixed up (driver was updated to v. 1.1)
+//Fixed: RGB LEDs reading from EEPROM
+//Fixed: Check for entering data from GPS in range
+//1.82  18.07.2018 Dual Date Format
 //1.81  18.02.2018 Temp. sensor present analyze
 //1.80   06.08.2017
 //Added: Date and Time GPS synchronization
@@ -144,6 +149,7 @@ byte data[12];
 byte addr[8];
 int celsius, fahrenheit;
 
+const byte DHVpin = 5; // off/on MAX1771 Driver  Hight Voltage(DHV) 110-220V
 const byte RedLedPin = 9; //MCU WDM output for red LEDs 9-g
 const byte GreenLedPin = 6; //MCU WDM output for green LEDs 6-b
 const byte BlueLedPin = 3; //MCU WDM output for blue LEDs 3-r
@@ -166,17 +172,19 @@ bool TempPresent = false;
 #define FAHRENHEIT 1
 
 String stringToDisplay = "000000"; // Conten of this string will be displayed on tubes (must be 6 chars length)
-int menuPosition = 0; // 0 - time
+int menuPosition = 0; 
+// 0 - time
 // 1 - date
 // 2 - alarm
 // 3 - 12/24 hours mode
+// 4 - Temperature
 
 byte blinkMask = B00000000; //bit mask for blinkin digits (1 - blink, 0 - constant light)
 int blankMask = B00000000; //bit mask for digits (1 - off, 0 - on)
 
-byte dotPattern = B00000000; //bit mask for separeting dots
-//B00000000 - turn off up and down dots
-//B1100000 - turn off all dots
+byte dotPattern = B00000000; //bit mask for separeting dots (1 - on, 0 - off)
+//B10000000 - upper dots
+//B01000000 - lower dots
 
 #define DS1307_ADDRESS 0x68
 byte zero = 0x00; //workaround for issue #527
@@ -316,6 +324,7 @@ bool GPS_sync_flag=false;
 *******************************************************************************************************/
 void setup()
 {
+  digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
   Wire.begin();
   //setRTCDateTime(23,40,00,25,7,15,1);
 
@@ -347,6 +356,7 @@ void setup()
   song = parseSong(song);
 
   pinMode(LEpin, OUTPUT);
+  pinMode(DHVpin, OUTPUT);
 
   // SPI setup
 
@@ -375,6 +385,7 @@ void setup()
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
 
   //
+  //digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -398,7 +409,9 @@ void setup()
     }
   }
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
+  digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //записываем только что считанное время в RTC чтобы запустить новую микросхему
+  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //p=song;
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
   irrecv.blink13(false);
@@ -538,7 +551,9 @@ void loop() {
       }
       if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
       //if (menuPosition == hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
+      digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+      digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
       return;
     } //end exit from edit mode
     Serial.print("menu pos=");
@@ -627,6 +642,13 @@ void loop() {
       EEPROM.write(LEDsRedValueEEPROMAddress, RedLight);
       EEPROM.write(LEDsGreenValueEEPROMAddress, GreenLight);
       EEPROM.write(LEDsBlueValueEEPROMAddress, BlueLight);
+      Serial.println(F("Store to EEPROM:"));
+      Serial.print(F("RED="));
+      Serial.println(RedLight);
+      Serial.print(F("GREEN="));
+      Serial.println(GreenLight);
+      Serial.print(F("Blue="));
+      Serial.println(BlueLight);
     }
   }
 
@@ -720,7 +742,7 @@ void loop() {
       stringToDisplay = String(PreZero(value[HoursOffsetIndex])) + "0000";
       blankMask = B00001111;
       if (value[HoursOffsetIndex]>=0) dotPattern = B00000000; //turn off all dots  
-        else dotPattern = B10000000; //turn off all dots  
+        else dotPattern = B10000000; //turn on upper dots  
       break;
      case DateFormatIndex:
       if (value[DateFormatIndex] == EU_DateFormat) 
@@ -769,6 +791,15 @@ void rotateFireWorks()
   analogWrite(RedLedPin, RedLight );
   analogWrite(GreenLedPin, GreenLight);
   analogWrite(BlueLedPin, BlueLight);
+  // ********
+  //Serial.print(F("RED="));
+  //Serial.println(RedLight);
+  //Serial.print(F("GREEN="));
+  //Serial.println(GreenLight);
+  //Serial.print(F("Blue="));
+  //Serial.println(BlueLight);
+  // ********
+  
   cycle = cycle + 1;
   if (cycle == 255)
   {
@@ -829,6 +860,7 @@ void doTest()
   bool test=1;
   byte strIndex=-1;
   unsigned long startOfTest=millis()+1000; //disable delaying in first iteration
+  //digitalWrite(DHVpin, HIGH);
   bool digitsLock=false;
   while (test)
   {
@@ -1131,7 +1163,7 @@ void incrementValue()
     if (value[menuPosition] > maxValue[menuPosition])  value[menuPosition] = minValue[menuPosition];
     if (menuPosition == Alarm01)
     {
-      if (value[menuPosition] == 1) /*digitalWrite(pinUpperDots, HIGH);*/dotPattern = B10000000; //turn on all dots
+      if (value[menuPosition] == 1) /*digitalWrite(pinUpperDots, HIGH);*/dotPattern = B10000000; //turn on upper dots
       /*else digitalWrite(pinUpperDots, LOW); */ dotPattern = B00000000; //turn off all dots
     }
     if (menuPosition!=DateFormatIndex) injectDigits(blinkMask, value[menuPosition]);
@@ -1149,8 +1181,8 @@ void dicrementValue()
     if (value[menuPosition] < minValue[menuPosition]) value[menuPosition] = maxValue[menuPosition];
     if (menuPosition == Alarm01)
     {
-      if (value[menuPosition] == 1) /*digitalWrite(pinUpperDots, HIGH);*/ dotPattern = B10000000; //turn on upper dots включаем верхние точки
-      else /*digitalWrite(pinUpperDots, LOW);*/ dotPattern = B00000000; //turn off upper dots
+      if (value[menuPosition] == 1) /*digitalWrite(pinUpperDots, HIGH);*/ dotPattern = B10000000; //turn on upper dots
+      else /*digitalWrite(pinUpperDots, LOW);*/ dotPattern = B00000000; //turn off all dots
     }
     if (menuPosition!=DateFormatIndex) injectDigits(blinkMask, value[menuPosition]);
     Serial.print("value=");
@@ -1177,9 +1209,18 @@ void checkAlarmTime()
 
 void setLEDsFromEEPROM()
 {
-  digitalWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
-  digitalWrite(GreenLedPin, EEPROM.read(LEDsGreenValueEEPROMAddress));
-  digitalWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));
+  analogWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
+  analogWrite(GreenLedPin, EEPROM.read(LEDsGreenValueEEPROMAddress));
+  analogWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));
+    // ********
+  Serial.println(F("Readed from EEPROM"));
+  Serial.print(F("RED="));
+  Serial.println(EEPROM.read(LEDsRedValueEEPROMAddress));
+  Serial.print(F("GREEN="));
+  Serial.println(EEPROM.read(LEDsGreenValueEEPROMAddress));
+  Serial.print(F("Blue="));
+  Serial.println(EEPROM.read(LEDsBlueValueEEPROMAddress));
+  // ********
 }
 
 void modesChanger()
@@ -1285,19 +1326,6 @@ String updateDateString()
   return DateString;
 }
 
-String updateTemperatureString(float fDegrees)
-{
-  int iDegrees = round(fDegrees);
-  String strTemp;
-
-  strTemp = "0" + String(abs(iDegrees)) + "0";
-  if (abs(iDegrees) < 1000) strTemp = "00" + String(abs(iDegrees)) + "0";
-  if (abs(iDegrees) < 100) strTemp = "000" + String(abs(iDegrees)) + "0";
-  if (abs(iDegrees) < 10) strTemp = "0000" + String(abs(iDegrees)) + "0";
-
-  return strTemp;
-}
-
 float getTemperature (boolean bTempFormat)
 {
   byte TempRawData[2];
@@ -1317,15 +1345,6 @@ float getTemperature (boolean bTempFormat)
   if (!bTempFormat) fDegrees = celsius * 10;
   else fDegrees = (celsius * 1.8 + 32.0) * 10;
   return fDegrees;
-}
-
-word blankDigit(int pos)
-{
-  int lowBit = blankMask >> pos;
-  lowBit = lowBit & B00000001;
-  word mask = 0;
-  if (lowBit == 1) mask = 0xFFFF;
-  return mask;
 }
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
@@ -1390,7 +1409,6 @@ bool GPS_Parse_DateTime()
        {
        // Serial.println("RMC!!!");
        }
-  //Serial.println("Grisha, time from GPS is:");
   //Serial.print("hh: ");
   int hh=(GPS_Package[7]-48)*10+GPS_Package[8]-48;
   //Serial.println(hh);
@@ -1424,7 +1442,13 @@ bool GPS_Parse_DateTime()
   int yyyy=2000+(GPS_Package[GPSDatePos+4]-48)*10+GPS_Package[GPSDatePos+5]-48;
   //Serial.print("yyyy: ");
   //Serial.println(yyyy);
-  if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
+  //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
+  if ( !inRange( yyyy, 2018, 2038 ) ||
+    !inRange( MM, 1, 12 ) ||
+    !inRange( dd, 1, 31 ) ||
+    !inRange( hh, 0, 23 ) ||
+    !inRange( mm, 0, 59 ) ||
+    !inRange( ss, 0, 59 ) ) return false;
     else 
     {
       GPS_Date_Time.GPS_hours=hh;
@@ -1462,3 +1486,62 @@ uint8_t ControlCheckSum()
 }
 
 #endif
+
+/*String updateTemperatureString(float fDegrees)
+{
+  int iDegrees = round(fDegrees);
+  String strTemp;
+
+  strTemp = "0" + String(abs(iDegrees)) + "0";
+  if (abs(iDegrees) < 1000) strTemp = "00" + String(abs(iDegrees)) + "0";
+  if (abs(iDegrees) < 100) strTemp = "000" + String(abs(iDegrees)) + "0";
+  if (abs(iDegrees) < 10) strTemp = "0000" + String(abs(iDegrees)) + "0";
+
+  return strTemp;
+}*/
+
+String updateTemperatureString(float fDegrees)
+{
+  static  unsigned long lastTimeTemperatureString=millis()+1100;
+  static String strTemp ="000000";
+  /*int delayTempUpdate;
+  if (displayNow) delayTempUpdate=0;
+    else delayTempUpdate = 1000;*/
+  if ((millis() - lastTimeTemperatureString) > 1000)
+  {
+    //Serial.println("F(Updating temp. str.)");
+    lastTimeTemperatureString = millis();
+    int iDegrees = round(fDegrees);
+    if (value[DegreesFormatIndex] == CELSIUS)
+    {
+      strTemp = "0" + String(abs(iDegrees)) + "0";
+      if (abs(iDegrees) < 1000) strTemp = "00" + String(abs(iDegrees)) + "0";
+      if (abs(iDegrees) < 100) strTemp = "000" + String(abs(iDegrees)) + "0";
+      if (abs(iDegrees) < 10) strTemp = "0000" + String(abs(iDegrees)) + "0";
+    }else
+    {
+      strTemp = "0" + String(abs(iDegrees)) + "0";
+      if (abs(iDegrees) < 1000) strTemp = "00" + String(abs(iDegrees)/10) + "00";
+      if (abs(iDegrees) < 100) strTemp = "000" + String(abs(iDegrees)/10) + "00";
+      if (abs(iDegrees) < 10) strTemp = "0000" + String(abs(iDegrees)/10) + "00";
+    }
+
+    #ifdef tubes8
+      strTemp= ""+strTemp+"00";
+    #endif
+    return strTemp;
+  }
+  return strTemp;
+}
+
+
+boolean inRange( int no, int low, int high )
+{
+if ( no < low || no > high ) 
+{
+  Serial.println(F("Not in range"));
+  Serial.println(String(no) + ":" + String (low) + "-" + String(high));
+  return false;
+}
+return true;
+}
