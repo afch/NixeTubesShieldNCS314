@@ -149,7 +149,6 @@ byte data[12];
 byte addr[8];
 int celsius, fahrenheit;
 
-const byte DHVpin = 5; // off/on MAX1771 Driver  Hight Voltage(DHV) 110-220V
 const byte RedLedPin = 9; //MCU WDM output for red LEDs 9-g
 const byte GreenLedPin = 6; //MCU WDM output for green LEDs 6-b
 const byte BlueLedPin = 3; //MCU WDM output for blue LEDs 3-r
@@ -324,7 +323,6 @@ bool GPS_sync_flag=false;
 *******************************************************************************************************/
 void setup()
 {
-  digitalWrite(DHVpin, LOW);    // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
   Wire.begin();
   //setRTCDateTime(23,40,00,25,7,15,1);
 
@@ -356,7 +354,6 @@ void setup()
   song = parseSong(song);
 
   pinMode(LEpin, OUTPUT);
-  pinMode(DHVpin, OUTPUT);
 
   // SPI setup
 
@@ -384,8 +381,6 @@ void setup()
   downButton.multiclickTime = 30;  // Time limit for multi clicks
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
 
-  //
-  //digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -409,10 +404,7 @@ void setup()
     }
   }
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
-  digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
-  //setRTCDateTime(RTC_hours,RTC_minutes,RTC_seconds,RTC_day,RTC_month,RTC_year,1); //записываем только что считанное время в RTC чтобы запустить новую микросхему
-  digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
-  //p=song;
+
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
   irrecv.blink13(false);
   irrecv.enableIRIn(); // Start the receiver
@@ -551,9 +543,7 @@ void loop() {
       }
       if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
       //if (menuPosition == hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
-      digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
-      digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
       return;
     } //end exit from edit mode
     Serial.print("menu pos=");
@@ -860,7 +850,6 @@ void doTest()
   bool test=1;
   byte strIndex=-1;
   unsigned long startOfTest=millis()+1000; //disable delaying in first iteration
-  //digitalWrite(DHVpin, HIGH);
   bool digitsLock=false;
   while (test)
   {
