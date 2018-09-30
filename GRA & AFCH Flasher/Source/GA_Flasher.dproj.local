@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2016/10/21 16:49:18.000.118,=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Unit3.pas</Transaction>
+    <Transaction>2016/10/21 16:54:04.000.695,=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Unit3.pas</Transaction>
+    <Transaction>2016/10/21 17:05:53.000.846,C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Project3.dproj=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Project3.dproj</Transaction>
+    <Transaction>2016/10/21 17:05:54.000.315,=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Unit4.pas</Transaction>
+    <Transaction>2016/10/21 17:06:36.000.625,C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Project3.dproj=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Project4.dproj</Transaction>
+    <Transaction>2016/10/21 20:01:25.000.127,C:\Users\Alec\Documents\Embarcadero\Studio\Projects\Project4.dproj=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\GRAandAFCH.dproj</Transaction>
+    <Transaction>2016/10/21 20:02:32.000.374,C:\Users\Alec\Documents\Embarcadero\Studio\Projects\GRAandAFCH.dproj=C:\Users\Alec\Documents\Embarcadero\Studio\Projects\GA_Flasher.dproj</Transaction>
+    <Transaction>2018/09/30 15:39:54.000.490,C:\Users\Alec\Dropbox\btc\Nixie_Clock_Edit\NixieClock_Prog\GA_Flasher\Unit1.pas=C:\Users\Alec\Dropbox\btc\Nixie_Clock_Edit\NixieClock_Prog\GA_Flasher\Unit4.pas</Transaction>
+    <Transaction>2018/09/30 15:39:54.000.490,C:\Users\Alec\Dropbox\btc\Nixie_Clock_Edit\NixieClock_Prog\GA_Flasher\Unit1.dfm=C:\Users\Alec\Dropbox\btc\Nixie_Clock_Edit\NixieClock_Prog\GA_Flasher\Unit4.dfm</Transaction>
+  </Transactions>
+</BorlandProject>
