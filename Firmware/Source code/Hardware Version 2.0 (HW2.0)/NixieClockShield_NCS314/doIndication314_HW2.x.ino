@@ -1,13 +1,22 @@
 //driver for NCM107+NCT318+NCT818, NCS312, NCS314 HW2.x (registers HV5122)
-//driver version 1.1
+//driver version 1.2
 //1 on register's output will turn on a digit 
 
+
+//v1.2 SPI setup moved to driver's file
 //v1.1 Mixed up on/off for dots
 
 #include "doIndication314_HW2.x.h"
 
 #define UpperDotsMask 0x80000000
 #define LowerDotsMask 0x40000000
+
+void SPISetup()
+{
+  SPI.begin(); //
+  SPI.setDataMode (SPI_MODE2); // Mode 3 SPI
+  SPI.setClockDivider(SPI_CLOCK_DIV8); // SCK = 16MHz/128= 125kHz
+}
 
 void doIndication()
 {
@@ -143,4 +152,3 @@ word blankDigit(int pos)
   if (lowBit == 1) mask = 0xFFFF;
   return mask;
 }
-
