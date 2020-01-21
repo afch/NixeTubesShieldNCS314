@@ -1,7 +1,9 @@
-const String FirmwareVersion = "018400";
+const String FirmwareVersion = "018500";
 #define HardwareVersion "NCS314 for HW 3.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.85 21.02.2020
+//Fixed: Bug with time zones more than +-9
 //1.84 08.04.2018
 //LEDs functions moved to external file
 //LEDs freezing while music (or sound) played.
@@ -1300,7 +1302,7 @@ void SyncWithGPS()
     Serial.println(GPS_Date_Time.GPS_seconds);
     
     setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    adjustTime(value[HoursOffsetIndex] * 3600);
+    adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync=millis();
