@@ -1,5 +1,6 @@
 //driver for NCS314 HW3.x (registers HV57708)
-//driver version 1.0
+//driver version 1.1
+//1.1 SPI mode changed to MODE3
 //0 on register's input will turn on a digit (when pol=high)
 
 #include "doIndication314_HW3.x.h"
@@ -10,7 +11,7 @@
 void SPISetup()
 {
   SPI.begin(); //
-  SPI.beginTransaction(SPISettings(1000000, MSBFIRST /*LSBFIRST*/, SPI_MODE1)); // по датащиту получается вроде как режим 0, но мне кажется что он не подходит: выводит одновременно несколько цифр
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST /*LSBFIRST*/, SPI_MODE3)); // по датащиту получается вроде как режим 0, но мне кажется что он не подходит: выводит одновременно несколько цифр
                                                                                 // режим 1 делает вид что работает выводит 3 <- эти два режима работют наиболее адекватно
                                                                                 // режим 2 делает вид что работает выводит 7
                                                                                 // режим 3 делает вид что работает выводит 3 <- эти два режима работют наиболее адекватно
