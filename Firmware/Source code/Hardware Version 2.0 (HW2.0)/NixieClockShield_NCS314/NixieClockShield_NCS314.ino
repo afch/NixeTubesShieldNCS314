@@ -1,7 +1,11 @@
-const String FirmwareVersion = "018600";
+const String FirmwareVersion = "018900";
  #define HardwareVersion "NCS314 for HW 2.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.89 03.04.2020
+//Dots sync with seconds
+//1.88 30.03.2020
+//GPS synchronization algorithm has been changed (again)
 //1.86 23.02.2020
 //GPS synchronization algorithm changed
 //1.85.3 23.02.2020
@@ -58,7 +62,9 @@ const String FirmwareVersion = "018600";
 
 #define GPS_SYNC_INTERVAL 1800000 // in milliseconds
 unsigned long Last_Time_GPS_Sync = 0;
-bool GPS_Sync_Flag = 0;
+bool GPS_Sync_Flag = 1;
+//uint32_t GPS_Sync_Interval=120000; // 2 minutes
+uint32_t GPS_Sync_Interval=60000; // 1 minutes
 #include <NMEAGPS.h>
 static NMEAGPS  gps;
 static gps_fix  fix;
@@ -391,6 +397,7 @@ void setup()
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
+  testDS3231TempSensor();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if (LEDsLock == 1)
   {
@@ -445,7 +452,12 @@ void loop() {
 
   if (gps.available( Serial1 )) fix = gps.read(); 
     else fix.valid.time=false;
-  if (((millis()) - Last_Time_GPS_Sync) > GPS_SYNC_INTERVAL) GPS_Sync_Flag = 0;
+  if (((millis()) - Last_Time_GPS_Sync) > GPS_Sync_Interval) 
+  {
+    GPS_Sync_Interval=GPS_SYNC_INTERVAL;
+    GPS_Sync_Flag = 0;
+    //Serial.println(F("Attempt to sync with GPS"));
+  }
   if (GPS_Sync_Flag==0) GPSCheckValidity();
 
   IRresults.value = 0;
@@ -772,13 +784,13 @@ String PreZero(int digit)
 
 String updateDisplayString()
 {
-  static  unsigned long lastTimeStringWasUpdated;
-  if ((millis() - lastTimeStringWasUpdated) > 1000)
+  static int prevS=-1;
+
+  if (second()!=prevS)
   {
-    lastTimeStringWasUpdated = millis();
+    prevS=second();
     return getTimeNow();
-  }
-  return stringToDisplay;
+  } else return stringToDisplay;
 }
 
 String getTimeNow()
@@ -851,25 +863,8 @@ void doDotBlink()
 {
   //dotPattern = B11000000; return; //always on
   //dotPattern = B00000000; return; //always off
-  static unsigned long lastTimeBlink = millis();
-  static bool dotState = 0;
-  if ((millis() - lastTimeBlink) > 1000)
-  {
-    lastTimeBlink = millis();
-    dotState = !dotState;
-    if (dotState)
-    {
-      dotPattern = B11000000;
-      /*digitalWrite(pinUpperDots, HIGH);
-        digitalWrite(pinLowerDots, HIGH);*/
-    }
-    else
-    {
-      dotPattern = B00000000;
-      /*digitalWrite(pinUpperDots, LOW);
-        digitalWrite(pinLowerDots, LOW);*/
-    }
-  }
+  if (second()%2 == 0) dotPattern = B11000000;
+    else dotPattern = B00000000;
 }
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
@@ -1311,12 +1306,26 @@ void SyncWithGPS()
 
 void GPSCheckValidity()
 {
-  if (gps.UTCms()>900) return;
-  if ((fix.valid.time) && (fix.valid.date) && (fix.status>=3)) 
-  {
+  if ((fix.dateTime.hours < 0)
+      || (fix.dateTime.hours > 23)) return;
+
+    if ((fix.dateTime.minutes < 0)
+      || (fix.dateTime.minutes > 59)) return;
+
+    if ((fix.dateTime.seconds < 0)
+      || (fix.dateTime.seconds > 59)) return;
+
+    if ((fix.dateTime.date < 0)
+      || (fix.dateTime.date > 31)) return;   
+
+    if ((fix.dateTime.month < 0)
+      || (fix.dateTime.month > 12)) return;
+      
+    if ((fix.dateTime.full_year() < 2020)
+      || (fix.dateTime.full_year() > 2030)) return;
+      
     fix.valid.time=false;
     SyncWithGPS();
-  }
 }
 
 #endif
