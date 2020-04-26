@@ -1295,10 +1295,12 @@ void SyncWithGPS()
     Serial.println(fix.dateTime.minutes);
     Serial.println(fix.dateTime.seconds);
 
-    //setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
-    if (gps.UTCms()>=500) adjustTime(1);
-    adjustTime((long)value[HoursOffsetIndex] * 3600);
+    const uint8_t tmYear = y2kYearToTm(fix.dateTime.year);
+    tmElements_t tm = { fix.dateTime.seconds, fix.dateTime.minutes, fix.dateTime.hours,
+                        0, fix.dateTime.date, fix.dateTime.month, tmYear };
+    time_t localtime = makeTime(tm) + value[HoursOffsetIndex] * 3600;
+    if (gps.UTCms()>=500) ++localtime;
+    setTime(localtime);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync = millis();
