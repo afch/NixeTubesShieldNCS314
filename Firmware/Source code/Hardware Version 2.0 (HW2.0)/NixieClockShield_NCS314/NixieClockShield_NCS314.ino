@@ -56,6 +56,7 @@ const String FirmwareVersion = "018900";
 #include <Tone.h>
 #include <EEPROM.h>
 #include "doIndication314_HW2.x.h"
+#include "dst.h"
 #include <OneWire.h>
 //IR remote control /////////// START /////////////////////////////
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
@@ -68,6 +69,7 @@ uint32_t GPS_Sync_Interval=60000; // 1 minutes
 #include <NMEAGPS.h>
 static NMEAGPS  gps;
 static gps_fix  fix;
+static bool dst;
 
 #include <IRremote.h>
 int RECV_PIN = 4;
@@ -223,7 +225,8 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define Alarm01          16
 #define hModeValueIndex  17
 #define DegreesFormatIndex 18
-#define HoursOffsetIndex 19
+#define DSTModeIndex     19
+#define HoursOffsetIndex 20
 
 #define FirstParent      TimeIndex
 #define LastParent       TimeZoneIndex
@@ -232,14 +235,14 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define NoChild          0
 
 //-------------------------------0--------1--------2-------3--------4--------5--------6--------7--------8--------9----------10-------11---------12---------13-------14-------15---------16---------17--------18----------19
-//                     names:  Time,   Date,   Alarm,   12/24, Temperature,TimeZone,hours,   mintues, seconds, DateFormat, day,    month,   year,      hour,   minute,   second alarm01  hour_format Deg.FormIndex HoursOffset
-//                               1        1        1       1        1        1        1        1        1        1          1        1          1          1        1        1        1            1         1        1
-int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent, NoParent, NoParent, 1,       1,       1,       2,         2,       2,         2,         3,       3,       3,       3,       4,           5,        6};
-int firstChild[SettingsCount] = {6,       9,       13,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int lastChild[SettingsCount] = { 8,      12,       16,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,  EU_DateFormat,  0,       0,         0,         0,       0,       0,       0,       24,          0,        2};
-int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59, US_DateFormat,  31,      12,        99,       23,      59,      59,       1,       24,     FAHRENHEIT,    14};
-int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00, EU_DateFormat,  1,       1,         00,       00,      00,      00,       0,       12,      CELSIUS,     -12};
+//                     names:  Time,   Date,   Alarm,   12/24, Temperature,TimeZone,hours,   mintues, seconds, DateFormat, day,    month,   year,      hour,   minute,   second alarm01  hour_format Deg.FormIndex DSTMode HoursOffset
+//                               1        1        1       1        1        1        1        1        1        1          1        1          1          1        1        1        1            1         1        1          1
+int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent, NoParent, NoParent, 1,       1,       1,       2,         2,       2,         2,         3,       3,       3,       3,       4,           5,        6,         6};
+int firstChild[SettingsCount] = {6,       9,       13,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0,         0};
+int lastChild[SettingsCount] = { 8,      12,       16,     17,      18,      20,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0,         0};
+int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,  EU_DateFormat,  0,       0,         0,         0,       0,       0,       0,       24,          0,        DST::DST_DEFAULT,        2};
+int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59, US_DateFormat,  31,      12,        99,       23,      59,      59,       1,       24,     FAHRENHEIT,    DST::DST_US2007,    14};
+int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00, EU_DateFormat,  1,       1,         00,       00,      00,      00,       0,       12,      CELSIUS,     DST::DST_DEFAULT,     -12};
 int blinkPattern[SettingsCount] = {
   B00000000, //0
   B00000000, //1
@@ -261,6 +264,7 @@ int blinkPattern[SettingsCount] = {
   B00001100, //17
   B00111111, //18
   B00000011, //19
+  B00110000, //20
 };
 
 bool editMode = false;
@@ -283,6 +287,8 @@ byte LEDsBlueValueEEPROMAddress = 10;
 byte DegreesFormatEEPROMAddress = 11;
 byte HoursOffsetEEPROMAddress = 12;
 byte DateFormatEEPROMAddress = 13;
+byte DSTModeEEPROMAddress = 14;
+byte DstEEPROMAddress = 15;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -358,7 +364,10 @@ void setup()
   if (EEPROM.read(DegreesFormatEEPROMAddress) == 255) value[DegreesFormatIndex] = CELSIUS; else value[DegreesFormatIndex] = EEPROM.read(DegreesFormatEEPROMAddress);
   if (EEPROM.read(HoursOffsetEEPROMAddress) == 255) value[HoursOffsetIndex] = value[HoursOffsetIndex]; else value[HoursOffsetIndex] = EEPROM.read(HoursOffsetEEPROMAddress) + minValue[HoursOffsetIndex];
   if (EEPROM.read(DateFormatEEPROMAddress) == 255) value[DateFormatIndex] = value[DateFormatIndex]; else value[DateFormatIndex] = EEPROM.read(DateFormatEEPROMAddress);
-
+  uint8_t val;
+  if ((val = EEPROM.read(DSTModeEEPROMAddress)) != 255) value[DSTModeIndex] = val;
+  if ((val = EEPROM.read(DstEEPROMAddress)) != 255) dst = val;
+  DST::setDSTMode(value[DSTModeIndex]);
 
   Serial.print(F("led lock="));
   Serial.println(LEDsLock);
@@ -436,6 +445,19 @@ unsigned long prevTime = 0; // time of lase tube was lit
 unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 //int minuteL=0; //младшая цифра минут
 
+void adjustForDST() {
+  const bool lastDST = dst;
+  tmElements_t tm;
+  breakTime(now(), tm);
+  // Only set dst here because it is saved permanently below.
+  dst = DST::isDST(tm, value[HoursOffsetIndex], lastDST);
+  if (dst != lastDST) {
+    adjustTime(dst ? 3600 : -3600);
+    setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    EEPROM.write(DstEEPROMAddress, dst ? 1 : 0);
+  }
+}
+
 /***************************************************************************************************************
   MAIN Programm
 ***************************************************************************************************************/
@@ -446,6 +468,11 @@ void loop() {
     getRTCTime();
     setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
     //Serial.println(F("Sync"));
+  }
+
+  if (millis() % 1000 == 0) //check for change of hoursOffset or DST every second
+  {
+    adjustForDST();
   }
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
@@ -558,7 +585,13 @@ void loop() {
       {
         EEPROM.write(DegreesFormatEEPROMAddress, value[DegreesFormatIndex]);
       }
-      if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
+      if (menuPosition == TimeZoneIndex) {
+        EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
+        EEPROM.write(DSTModeEEPROMAddress, value[DSTModeIndex]);
+        DST::setDSTMode(value[DSTModeIndex]);
+        adjustForDST();
+        EEPROM.write(DstEEPROMAddress, dst ? 1 : 0);
+      }
       //if (menuPosition == hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
       return;
@@ -746,8 +779,8 @@ void loop() {
       break;
     case TimeZoneIndex:
     case HoursOffsetIndex:
-      stringToDisplay = String(PreZero(value[HoursOffsetIndex])) + "0000";
-      blankMask = B00001111;
+      stringToDisplay = String(PreZero(value[DSTModeIndex])) + "00" + String(PreZero(value[HoursOffsetIndex]));
+      blankMask = B00001100;
       if (value[HoursOffsetIndex] >= 0) dotPattern = B00000000; //turn off all dots
       else dotPattern = B10000000; //turn on upper dots
       break;
@@ -1295,10 +1328,12 @@ void SyncWithGPS()
     Serial.println(fix.dateTime.minutes);
     Serial.println(fix.dateTime.seconds);
 
-    //setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
-    if (gps.UTCms()>=500) adjustTime(1);
-    adjustTime((long)value[HoursOffsetIndex] * 3600);
+    const uint8_t tmYear = y2kYearToTm(fix.dateTime.year);
+    tmElements_t tm = { fix.dateTime.seconds, fix.dateTime.minutes, fix.dateTime.hours,
+                        0, fix.dateTime.date, fix.dateTime.month, tmYear };
+    time_t localtime = makeTime(tm) + (value[HoursOffsetIndex] + (dst ? 1 : 0)) * 3600;
+    if (gps.UTCms()>=500) ++localtime;
+    setTime(localtime);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync = millis();
