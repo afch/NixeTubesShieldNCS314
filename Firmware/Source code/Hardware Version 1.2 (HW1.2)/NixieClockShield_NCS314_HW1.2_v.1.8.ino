@@ -1,6 +1,8 @@
-const String FirmwareVersion = "017000";
+const String FirmwareVersion = "018000";
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
+//1.80   06.08.2017
+//Added: Date and Time GPS synchronization
 //1.70   30.07.2017
 //Added  IR remote control support (Sony RM-X151) ("MODE", "UP", "DOWN")
 //1.60   24_07_2017
@@ -109,6 +111,25 @@ int DownButtonState = 0;
 
 //IR remote control /////////// START /////////////////////////////
 
+#define GPS_BUFFER_LENGTH 83
+
+char GPS_Package[GPS_BUFFER_LENGTH];
+byte GPS_position=0;
+
+struct GPS_DATE_TIME
+{
+  byte GPS_hours;
+  byte GPS_minutes;
+  byte GPS_seconds;
+  byte GPS_day;
+  byte GPS_mounth;
+  int GPS_year; 
+  bool GPS_Valid_Data=false;
+  unsigned long GPS_Data_Parsed_time;
+};
+
+GPS_DATE_TIME GPS_Date_Time;
+
 byte data[12];
 byte addr[8];
 int celsius, fahrenheit;
@@ -158,51 +179,55 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define AlarmIndex       2
 #define hModeIndex       3
 #define TemperatureIndex 4
-#define TimeHoursIndex   5
-#define TimeMintuesIndex 6
-#define TimeSecondsIndex 7
-#define DateDayIndex     8
-#define DateMonthIndex   9
-#define DateYearIndex    10
-#define AlarmHourIndex   11
-#define AlarmMinuteIndex 12
-#define AlarmSecondIndex 13
-#define Alarm01          14
-#define hModeValueIndex  15
-#define DegreesFormatIndex 16
+#define TimeZoneIndex    5
+#define TimeHoursIndex   6
+#define TimeMintuesIndex 7
+#define TimeSecondsIndex 8
+#define DateDayIndex     9
+#define DateMonthIndex   10
+#define DateYearIndex    11
+#define AlarmHourIndex   12
+#define AlarmMinuteIndex 13
+#define AlarmSecondIndex 14
+#define Alarm01          15
+#define hModeValueIndex  16
+#define DegreesFormatIndex 17
+#define HoursOffsetIndex 18
 
 #define FirstParent      TimeIndex
-#define LastParent       TemperatureIndex
-#define SettingsCount    (DegreesFormatIndex+1)
+#define LastParent       TimeZoneIndex
+#define SettingsCount    (HoursOffsetIndex+1)
 #define NoParent         0
 
-//-------------------------------0--------1--------2-------3--------4--------5--------6--------7--------8--------9--------10-------11-------12-------13-------14-------15---------16
-//                     names:  Time,   Date,   Alarm,   12/24, Temperature, hours,   mintues, seconds,  day,    month,   year,    hour,   minute,   second alarm01  hour_format DegreesFormatIndex
-//                               1        1        1       1        1        1        1        1        1        1        1        1        1        1        1        1          1
-int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent, NoParent,   1,       1,       1,       2,       2,       2,       3,       3,       3,       3,       4,         5};
-int firstChild[SettingsCount] = {5,       8,       11,     15,      16,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,         0};
-int lastChild[SettingsCount] = { 7,      10,       14,     15,      16,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,         0};
-int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       24,        0};
-int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       23,      59,      59,      31,      12,      99,      23,      59,      59,      1,       24,    FAHRENHEIT};
-int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       00,      00,      00,       1,       1,      00,      00,      00,      00,      0,       12,     CELSIUS};
+//-------------------------------0--------1--------2-------3--------4--------5--------6--------7--------8--------9--------10-------11-------12-------13-------14-------15---------16---------17--------18
+//                     names:  Time,   Date,   Alarm,   12/24, Temperature,TimeZone,hours,   mintues, seconds,  day,    month,   year,    hour,   minute,   second alarm01  hour_format Deg.FortIndex HoursOffset
+//                               1        1        1       1        1        1        1        1        1        1        1        1        1        1        1        1        1            1         1
+int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent,NoParent,NoParent,1,       1,       1,       2,       2,       2,       3,       3,       3,       3,       4,           5,        6};
+int firstChild[SettingsCount] = {6,       9,       12,     16,      17,      18,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,           0,        0};
+int lastChild[SettingsCount] = { 8,      11,       15,     16,      17,      18,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,           0,        0};
+int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       0,       24,          0,        2};
+int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59,      31,      12,      99,      23,      59,      59,      1,       24,     FAHRENHEIT,    14};
+int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00,       1,       1,      00,      00,      00,      00,      0,       12,      CELSIUS,     -12};
 int blinkPattern[SettingsCount] = {
   B00000000, //0
   B00000000, //1
   B00000000, //2
   B00000000, //3
   B00000000, //4
-  B00000011, //5
-  B00001100, //6
-  B00110000, //7
-  B00000011, //8
-  B00001100, //9
-  B00110000, //10
-  B00000011, //11
-  B00001100, //12
-  B00110000, //13
-  B11000000, //14
-  B00001100, //15
-  B00111111, //16
+  B00000000, //5
+  B00000011, //6
+  B00001100, //7
+  B00110000, //8
+  B00000011, //9
+  B00001100, //10
+  B00110000, //11
+  B00000011, //12
+  B00001100, //13
+  B00110000, //14
+  B11000000, //15
+  B00001100, //16
+  B00111111, //17
+  B00000011, //17
 };
 
 bool editMode = false;
@@ -223,6 +248,7 @@ byte LEDsRedValueEEPROMAddress = 8;
 byte LEDsGreenValueEEPROMAddress = 9;
 byte LEDsBlueValueEEPROMAddress = 10;
 byte DegreesFormatEEPROMAddress = 11;
+byte HoursOffsetEEPROMAddress = 12;
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -270,6 +296,9 @@ bool transactionInProgress = false; //antipoisoning transaction
 #define dateModePeriod 5000
 long modesChangePeriod = timeModePeriod;
 //end of antipoisoning transaction
+
+bool GPS_sync_flag=false;
+
 /*******************************************************************************************************
   Init Programm
 *******************************************************************************************************/
@@ -280,7 +309,7 @@ void setup()
   //setRTCDateTime(23,40,00,25,7,15,1);
 
   Serial.begin(115200);
-
+  
   if (EEPROM.read(HourFormatEEPROMAddress) != 12) value[hModeValueIndex] = 24; else value[hModeValueIndex] = 12;
   if (EEPROM.read(RGBLEDsEEPROMAddress) != 0) RGBLedsOn = true; else RGBLedsOn = false;
   if (EEPROM.read(AlarmTimeEEPROMAddress) == 255) value[AlarmHourIndex] = 0; else value[AlarmHourIndex] = EEPROM.read(AlarmTimeEEPROMAddress);
@@ -289,6 +318,7 @@ void setup()
   if (EEPROM.read(AlarmArmedEEPROMAddress) == 255) value[Alarm01] = 0; else value[Alarm01] = EEPROM.read(AlarmArmedEEPROMAddress);
   if (EEPROM.read(LEDsLockEEPROMAddress) == 255) LEDsLock = false; else LEDsLock = EEPROM.read(LEDsLockEEPROMAddress);
   if (EEPROM.read(DegreesFormatEEPROMAddress) == 255) value[DegreesFormatIndex] = CELSIUS; else value[DegreesFormatIndex] = EEPROM.read(DegreesFormatEEPROMAddress);
+  if (EEPROM.read(HoursOffsetEEPROMAddress) == 255) value[HoursOffsetIndex] = value[HoursOffsetIndex]; else value[HoursOffsetIndex] = EEPROM.read(HoursOffsetEEPROMAddress) + minValue[HoursOffsetIndex];
 
   Serial.print(F("led lock="));
   Serial.println(LEDsLock);
@@ -359,6 +389,7 @@ void setup()
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //p=song;
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  Serial1.begin(9600);
   irrecv.blink13(false);
   irrecv.enableIRIn(); // Start the receiver
 #endif
@@ -378,7 +409,9 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
   MAIN Programm
 ***************************************************************************************************************/
 void loop() {
+
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  GetDataFromSerial1();
   IRresults.value = 0;
   if (irrecv.decode(&IRresults)) {
     Serial.println(IRresults.value, HEX);
@@ -406,8 +439,15 @@ void loop() {
   {
     getRTCTime();
     setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
-    Serial.println(F("sync"));
+    Serial.println(F("Sync"));
   }
+
+  if ((millis() % 10001) == 0) //synchronize with GPS every 10 seconds
+  {
+    SyncWithGPS();
+    Serial.println(F("Sync from GPS"));
+  }
+  
 
   p = playmusic(p);
 
@@ -469,11 +509,12 @@ void loop() {
       {
         EEPROM.write(DegreesFormatEEPROMAddress, value[DegreesFormatIndex]);
       }
+      if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
       digitalWrite(DHVpin, LOW); // off MAX1771 Driver  Hight Voltage(DHV) 110-220V
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
       digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
     } //end exit from edit mode
-    value[menuPosition] = extractDigits(blinkMask);
+    if (menuPosition != HoursOffsetIndex) value[menuPosition] = extractDigits(blinkMask);
   }
   if ((setButton.clicks < 0) || (ModeButtonState == -1)) //long click
   {
@@ -489,8 +530,12 @@ void loop() {
     }
     editMode = !editMode;
     blinkMask = blinkPattern[menuPosition];
-    if (menuPosition != DegreesFormatIndex)
+    if ((menuPosition != DegreesFormatIndex) && (menuPosition != HoursOffsetIndex))
       value[menuPosition] = extractDigits(blinkMask);
+    Serial.print(F("menuPosition="));
+    Serial.println(menuPosition);
+    Serial.print(F("value="));
+    Serial.println(value[menuPosition]);  
   }
 
   if (upButton.clicks != 0) functionUpButton = upButton.clicks;
@@ -624,12 +669,20 @@ void loop() {
       if (getTemperature(value[DegreesFormatIndex]) < 0) dotPattern |= B10000000;
       else dotPattern &= B01111111;
       break;
+     case TimeZoneIndex:
+     case HoursOffsetIndex:
+      stringToDisplay = String(PreZero(value[HoursOffsetIndex])) + "0000";
+      blankMask = B00001111;
+      if (value[HoursOffsetIndex]>=0) dotPattern = B00000000; //turn off all dots  
+        else dotPattern = B10000000; //turn off all dots  
+      break;
   }
 //  IRresults.value=0;
 }
 
 String PreZero(int digit)
 {
+  digit=abs(digit);
   if (digit < 10) return String("0") + String(digit);
   else return String(digit);
 }
@@ -757,7 +810,7 @@ void doTest()
   Serial.println(F("Start Test"));
 
   p = song;
-  parseSong(p);
+  //parseSong(p);
 
   analogWrite(RedLedPin, 255);
   delay(1000);
@@ -1171,6 +1224,8 @@ void incrementValue()
       /*else digitalWrite(pinUpperDots, LOW); */ dotPattern = B00000000; //turn off all dots
     }
     injectDigits(blinkMask, value[menuPosition]);
+    Serial.print("value= ");
+    Serial.println(value[menuPosition]);
   }
 }
 
@@ -1187,6 +1242,8 @@ void dicrementValue()
       else /*digitalWrite(pinUpperDots, LOW);*/ dotPattern = B00000000; //turn off upper dots
     }
     injectDigits(blinkMask, value[menuPosition]);
+    Serial.print("value= ");
+    Serial.println(value[menuPosition]);
   }
 }
 
@@ -1349,3 +1406,135 @@ word blankDigit(int pos)
   if (lowBit == 1) mask = 0xFFFF;
   return mask;
 }
+
+void SyncWithGPS()
+{
+  static unsigned long Last_Time_GPS_Sync=0;
+  static bool GPS_Sync_Flag=0;
+  //byte HoursOffset=2;
+  if (GPS_Sync_Flag == 0) 
+  {
+    if ((millis()-GPS_Date_Time.GPS_Data_Parsed_time)>3000) {Serial.println("Parsed data to old"); return;}
+    Serial.println("Updating time...");
+    Serial.println(GPS_Date_Time.GPS_hours);
+    Serial.println(GPS_Date_Time.GPS_minutes);
+    Serial.println(GPS_Date_Time.GPS_seconds);
+    
+    setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
+    adjustTime(value[HoursOffsetIndex] * 3600);
+    setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
+    GPS_Sync_Flag = 1;
+    Last_Time_GPS_Sync=millis();
+  }
+    else
+    {
+      if (((millis())-Last_Time_GPS_Sync) > 1800000) GPS_Sync_Flag=0;
+        else GPS_Sync_Flag=1;
+    }
+}
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+void GetDataFromSerial1()
+{
+  if (Serial1.available()) {     // If anything comes in Serial1 (pins 0 & 1)
+    byte GPS_incoming_byte;
+    GPS_incoming_byte=Serial1.read();
+    //Serial.write(GPS_incoming_byte);
+    GPS_Package[GPS_position]=GPS_incoming_byte;
+    GPS_position++;
+    if (GPS_position == GPS_BUFFER_LENGTH-1)
+    {
+      GPS_position=0;
+     // Serial.println("more then BUFFER_LENGTH!!!!");
+    }
+    if (GPS_incoming_byte == 0x0A) 
+    {
+      GPS_Package[GPS_position]=0;
+      GPS_position=0;
+      if (ControlCheckSum()) {/*Serial.println("Call parse");*/ GPS_Parse_DateTime();}
+        
+    }
+  }
+}
+
+bool GPS_Parse_DateTime()
+{
+  bool GPSsignal=false;
+  if (!((GPS_Package[0]   == '$')
+       &&(GPS_Package[3] == 'R')
+       &&(GPS_Package[4] == 'M')
+       &&(GPS_Package[5] == 'C'))) {return false;}
+       else 
+       {
+       // Serial.println("RMC!!!");
+       }
+  //Serial.println("Grisha, time from GPS is:");
+  //Serial.print("hh: ");
+  int hh=(GPS_Package[7]-48)*10+GPS_Package[8]-48;
+  //Serial.println(hh);
+  int mm=(GPS_Package[9]-48)*10+GPS_Package[10]-48;
+  //Serial.print("mm: ");
+  //Serial.println(mm);
+  int ss=(GPS_Package[11]-48)*10+GPS_Package[12]-48;
+  //Serial.print("ss: ");
+  //Serial.println(ss);
+
+  byte GPSDatePos=0;
+  int CommasCounter=0;
+  for (int i = 12; i < GPS_BUFFER_LENGTH ; i++)  
+  {
+    if (GPS_Package[i] == ',')
+    {
+      CommasCounter++; 
+      if (CommasCounter==8) 
+        {
+          GPSDatePos=i+1;
+          break;
+        }
+    }
+  }
+  //Serial.print("dd: ");
+  int dd=(GPS_Package[GPSDatePos]-48)*10+GPS_Package[GPSDatePos+1]-48;
+  //Serial.println(dd);
+  int MM=(GPS_Package[GPSDatePos+2]-48)*10+GPS_Package[GPSDatePos+3]-48;
+  //Serial.print("MM: ");
+  //Serial.println(MM);
+  int yyyy=2000+(GPS_Package[GPSDatePos+4]-48)*10+GPS_Package[GPSDatePos+5]-48;
+  //Serial.print("yyyy: ");
+  //Serial.println(yyyy);
+  if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
+    else 
+    {
+      GPS_Date_Time.GPS_hours=hh;
+      GPS_Date_Time.GPS_minutes=mm;
+      GPS_Date_Time.GPS_seconds=ss;
+      GPS_Date_Time.GPS_day=dd;
+      GPS_Date_Time.GPS_mounth=MM;
+      GPS_Date_Time.GPS_year=yyyy;
+      GPS_Date_Time.GPS_Data_Parsed_time=millis();
+      //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
+      //GPS_Package[0]=0x0A;
+      return 1;
+    }
+}
+
+uint8_t ControlCheckSum()
+{
+  uint8_t  CheckSum = 0, MessageCheckSum = 0;   // check sum
+  uint16_t i = 1;                // 1 sybol left from '$'
+
+  while (GPS_Package[i]!='*')
+  {
+    CheckSum^=GPS_Package[i];
+    if (++i == GPS_BUFFER_LENGTH) {Serial.println("End of the line"); return 0;} // end of line not found
+  }
+
+  if (GPS_Package[++i]>0x40) MessageCheckSum=(GPS_Package[i]-0x37)<<4;  // ASCII codes to DEC convertation 
+  else                  MessageCheckSum=(GPS_Package[i]-0x30)<<4;  
+  if (GPS_Package[++i]>0x40) MessageCheckSum+=(GPS_Package[i]-0x37);
+  else                  MessageCheckSum+=(GPS_Package[i]-0x30);
+  
+  if (MessageCheckSum != CheckSum) {Serial.println("wrong checksum"); return 0;} // wrong checksum
+  //Serial.println("Checksum is ok");
+  return 1; // all ok!
+}
+#endif
