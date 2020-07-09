@@ -1,7 +1,9 @@
-const String FirmwareVersion = "018900";
+ const String FirmwareVersion = "019000";
 #define HardwareVersion "NCS314 for HW 3.x" 
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 3.x by GRA & AFCH (fominalec@gmail.com)
+//1.90 08.06.2020 
+//Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
 //1.89 03.04.2020
 //Dots sync with seconds
 //1.88 26.03.2020
@@ -1297,15 +1299,15 @@ float getTemperature (boolean bTempFormat)
 void SyncWithGPS()
 {
     //int offset=int((gps.UTCms()/1000.0)+0.5f);
-    Serial.println(F("Updating time..."));
+    /*Serial.println(F("Updating time..."));
     Serial.println(fix.dateTime.hours);
     Serial.println(fix.dateTime.minutes);
     Serial.println(fix.dateTime.seconds);
 
     Serial.println(fix.dateTime.date);
     Serial.println(fix.dateTime.month);
-    Serial.println(fix.dateTime.year);
-   // Serial.print("offset=");
+    Serial.println(fix.dateTime.year);*/
+    //Serial.print("offset=");
     //Serial.print(offset);
 
     setTime(fix.dateTime.hours, fix.dateTime.minutes, fix.dateTime.seconds, fix.dateTime.date, fix.dateTime.month, fix.dateTime.year);
@@ -1313,9 +1315,19 @@ void SyncWithGPS()
     //adjustTime(offset);
     adjustTime(1);
     adjustTime((long)value[HoursOffsetIndex] * 3600);
+
+    /*Serial.print(F("Arduino Time="));
+    Serial.print(hour());
+    Serial.print(":");
+    Serial.print(minute());
+    Serial.print(":");
+    Serial.println(second());*/
+    
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync = millis();
+
+    
 }
 
 void GPSCheckValidity()

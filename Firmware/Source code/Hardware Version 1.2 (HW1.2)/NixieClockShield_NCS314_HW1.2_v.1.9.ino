@@ -1,6 +1,8 @@
-const String FirmwareVersion = "018000";
+const String FirmwareVersion = "019000";
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 1.2 by GRA & AFCH (fominalec@gmail.com)
+//1.90 08.06.2020 
+//Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
 //1.80   06.08.2017
 //Added: Date and Time GPS synchronization
 //1.70   30.07.2017

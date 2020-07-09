@@ -301,6 +301,7 @@ void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
 
 void adjustTime(long adjustment) {
   sysTime += adjustment;
+  breakTime(now(), tm); // GRA & AFCH
 }
 
 // indicates if time has been set and recently synchronized
