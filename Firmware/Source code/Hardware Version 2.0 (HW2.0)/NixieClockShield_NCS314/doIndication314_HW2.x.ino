@@ -1,8 +1,9 @@
 //driver for NCM107+NCT318+NCT818, NCS312, NCS314 HW2.x (registers HV5122)
-//driver version 1.2
+//driver version 1.3
 //1 on register's output will turn on a digit 
 
-
+//v1.3(HV5222 MOD fix)
+//v1.2(HV5222 MOD)
 //v1.2 SPI setup moved to driver's file
 //v1.1 Mixed up on/off for dots
 
@@ -13,9 +14,13 @@
 
 void SPISetup()
 {
+  pinMode(RHV5222PIN, INPUT_PULLUP);
+  HV5222=!digitalRead(RHV5222PIN);
   SPI.begin(); //
-  SPI.setDataMode (SPI_MODE2); // Mode 3 SPI
-  SPI.setClockDivider(SPI_CLOCK_DIV8); // SCK = 16MHz/128= 125kHz
+
+  if (HV5222)
+    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE2));
+    else SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE2));
 }
 
 void doIndication()
@@ -39,25 +44,6 @@ void doIndication()
    *********************************************************/
    
   digitalWrite(LEpin, LOW); 
-  //-------- REG 2 ----------------------------------------------- 
-  /*Var32|=(unsigned long)(SymbolArray[digits%10]&doEditBlink(7))<<10; // Y2
-  digits=digits/10;
-
-  Var32 |= (unsigned long)SymbolArray[digits%10]&doEditBlink(6);//y1
-  digits=digits/10;
-
-  if (LD) Var32|=LowerDotsMask;
-    else  Var32&=~LowerDotsMask;
-  
-  if (UD) Var32|=UpperDotsMask;
-    else Var32&=~UpperDotsMask;  
-    
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
- //-------------------------------------------------------------------------
-*/
  //-------- REG 1 ----------------------------------------------- 
   Var32=0;
  
@@ -76,10 +62,20 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
 
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
+  
  //-------------------------------------------------------------------------
 
  //-------- REG 0 ----------------------------------------------- 
@@ -100,10 +96,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
      
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
 
   digitalWrite(LEpin, HIGH);    
 //-------------------------------------------------------------------------
