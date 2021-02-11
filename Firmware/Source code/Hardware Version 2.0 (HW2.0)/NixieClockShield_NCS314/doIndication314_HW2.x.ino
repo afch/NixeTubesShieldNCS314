@@ -9,9 +9,6 @@
 
 #include "doIndication314_HW2.x.h"
 
-#define UpperDotsMask 0x80000000
-#define LowerDotsMask 0x40000000
-
 void SPISetup()
 {
   pinMode(RHV5222PIN, INPUT_PULLUP);
