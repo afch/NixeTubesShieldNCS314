@@ -25,6 +25,7 @@
                      examples, add error checking and messages to RTC examples,
                      add examples to DS1307RTC library.
   1.4  5  Sep 2014 - compatibility with Arduino 1.5.7
+  .... GRA_AND_AFCH_TIME_LIB_MOD
 */
 
 #if ARDUINO >= 100
