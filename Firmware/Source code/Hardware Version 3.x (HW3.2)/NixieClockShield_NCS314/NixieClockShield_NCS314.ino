@@ -1,8 +1,10 @@
-const String FirmwareVersion = "019400";
+const String FirmwareVersion = "019500";
 //#define HardwareVersion "NCS314 for HW 3.x" 
 const char HardwareVersion[] PROGMEM = {"NCS314 for HW 3.x"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 3.x by GRA & AFCH (fominalec@gmail.com)
+//1.95 14.01.2021
+//GPS ANTI ROLLOVER FIX
 //1.94 17.02.2021
 //Added: Сhecking the presence of a gps receiver when turned on.
 //Return to the previous gps parser
@@ -478,9 +480,9 @@ void loop() {
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
   MillsNow=millis();
-  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval)
+  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval) // <!-----! 13.01.2022
   {
-    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; // <----!
+    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; // 
     //GPS_Sync_Flag = 0;
     if (AttMsgWasShowed==false) 
     {
@@ -1371,7 +1373,6 @@ void GetDataFromSerial1()
 
 bool GPS_Parse_DateTime()
 {
-  bool GPSsignal = false;
   if (!((GPS_Package[0]   == '$')
         && (GPS_Package[3] == 'R')
         && (GPS_Package[4] == 'M')
@@ -1399,6 +1400,12 @@ bool GPS_Parse_DateTime()
     if (GPS_Package[i] == ',')
     {
       CommasCounter++;
+      if (CommasCounter == 1)
+        if (GPS_Package[i + 1] != 'A') 
+        {
+          Serial.println("Validation failed");
+          return false;
+        }
       if (CommasCounter == 8)
       {
         GPSDatePos = i + 1;
@@ -1413,28 +1420,58 @@ bool GPS_Parse_DateTime()
   //Serial.print("MM: ");
   //Serial.println(MM);
   int yyyy = 2000 + (GPS_Package[GPSDatePos + 4] - 48) * 10 + GPS_Package[GPSDatePos + 5] - 48;
+  
   //Serial.print("yyyy: ");
   //Serial.println(yyyy);
   //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
-  if ( !inRange( yyyy, 2018, 2038 ) ||
+  if ( //!inRange( yyyy, 2018, 2038 ) ||
        !inRange( MM, 1, 12 ) ||
        !inRange( dd, 1, 31 ) ||
        !inRange( hh, 0, 23 ) ||
        !inRange( mm, 0, 59 ) ||
        !inRange( ss, 0, 59 ) ) return false;
-  else
+
+  if (yyyy < 2022) //fixing GPS rollover bug
   {
-    GPS_Date_Time.GPS_hours = hh;
-    GPS_Date_Time.GPS_minutes = mm;
-    GPS_Date_Time.GPS_seconds = ss;
-    GPS_Date_Time.GPS_day = dd;
-    GPS_Date_Time.GPS_mounth = MM;
-    GPS_Date_Time.GPS_year = yyyy;
-    GPS_Date_Time.GPS_Data_Parsed_time = millis();
-    //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
-    //GPS_Package[0]=0x0A;
-    return 1;
+    tmElements_t tmpTmElemtns;
+    tmpTmElemtns.Second = ss;
+    tmpTmElemtns.Minute = mm;
+    tmpTmElemtns.Hour = hh;
+    tmpTmElemtns.Day = dd;
+    tmpTmElemtns.Month = MM;
+    tmpTmElemtns.Year = yyyy - 1970; //offset from 1970
+
+    time_t tmpTime_t;
+    tmpTime_t=makeTime(tmpTmElemtns);
+    //Serial.print("time_t=");
+    //Serial.println(tmpTime_t);
+    tmpTime_t=tmpTime_t + 619315200; // seconds in 1024 weeks = 1024*7*24*3600
+    //Serial.print("new time_t=");
+    //Serial.println(tmpTime_t);
+    breakTime(tmpTime_t, tmpTmElemtns);
+    /*Serial.print("new year=");
+    Serial.println(1970 + tmpTmElemtns.Year);
+    Serial.print("new month=");
+    Serial.println(tmpTmElemtns.Month);
+    Serial.print("new day=");
+    Serial.println(tmpTmElemtns.Day);*/
+    yyyy = 1970 + tmpTmElemtns.Year;
+    MM = tmpTmElemtns.Month;
+    dd = tmpTmElemtns.Day;
   }
+
+  if (!inRange( yyyy, 2018, 2038 )) return false;
+  
+  GPS_Date_Time.GPS_hours = hh;
+  GPS_Date_Time.GPS_minutes = mm;
+  GPS_Date_Time.GPS_seconds = ss;
+  GPS_Date_Time.GPS_day = dd;
+  GPS_Date_Time.GPS_mounth = MM;
+  GPS_Date_Time.GPS_year = yyyy;
+  GPS_Date_Time.GPS_Data_Parsed_time = millis();
+  //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
+  //GPS_Package[0]=0x0A;
+  return 1;
 }
 
 uint8_t ControlCheckSum()
