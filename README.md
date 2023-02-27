@@ -21,7 +21,7 @@ https://youtu.be/DQZWPn0iAHw
 
 3. Compatibility:
 
-	Nixie Clock Shield for Arduino - <b>NCS314</b> (Hardware Versions: HW1.0, HW1.1, HW1.2, HW2.0, HW2.2) <br>
+	Nixie Clock Shield for Arduino - <b>NCS314</b> (Hardware Versions: HW1.0, HW1.1, HW1.2, HW2.0, HW2.2, HW2.3, HW3.x) <br>
 	Nixie Clock Shield for Arduino - <b>NCS312</b> (Hardware Versions: HW1.0 - HW1.3) - use the firmware for NCS314 version 2.0
 	
 3. eBay stores:
