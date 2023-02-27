@@ -1,4 +1,4 @@
-# Nixe Tubes Shield NCS314 and NCS312
+# Nixe Tubes Shield NCS314-4 Tubes, NCS314-6 Tubes and NCS312-6 Tubes
 Sketch for Arduino UNO and Nixie Tubes Shield NCS314 and NCS312 by GRA &amp; AFCH
 1. This repository content sources of project for Nixie Clock developed by GRA & AFCH.
 
