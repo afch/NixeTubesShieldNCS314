@@ -1,8 +1,10 @@
 # NTP Mod for the NCS314 3.x NixieClock shield from GRA&AFCH and Arduino Mega 2560 WiFi ESP8266
 
-ESP8266 taken without changes (except renaming wrong `ESP8622` into `ESP8266` from [this repository](https://github.com/buildxyz-git/nixiclock_ncs314).
+For this mod you need an Arduino Mega 2560 WiFi ESP8266 [like this one](https://s.click.aliexpress.com/e/_DFAquy5) (be sure that you pick the MEGA WiFi version!).
 
-Project was modified, tested and flashed with `Arduino 1.8.19 for Windows`.
+The ESP8266 code was taken without any changes (except renaming wrong `ESP8622` into `ESP8266` from [this repository](https://github.com/buildxyz-git/nixiclock_ncs314).
+
+The project was modified, tested and flashed with `Arduino 1.8.19 for Windows`.
 
 ## Flash ESP8266
 
@@ -13,6 +15,8 @@ Pins 5, 6 and 7 ON, all other pins off. Board: Generic ESP8266 Module. Flash Siz
 Create a new folder `src` in `NixieClockShield_NCS314_NTP` and put the [TimeZone](https://github.com/JChristensen/Timezone) library into it. Rename the folder `Timezone-x.x.x` into `Timezone`.
 
 Pins 1, 2, 3 and 4 ON, all other pins off. Board: Arduino Mega or Mega 2560.
+
+Pin settings also for operation mode.
 
 ## Wifi setup
 
