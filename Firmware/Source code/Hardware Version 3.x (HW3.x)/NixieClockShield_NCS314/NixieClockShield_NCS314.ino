@@ -1,8 +1,10 @@
-const String FirmwareVersion = "019500";
+const String FirmwareVersion = "019600";
 //#define HardwareVersion "NCS314 for HW 3.x" 
 const char HardwareVersion[] PROGMEM = {"NCS314 for HW 3.x"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 3.x by GRA & AFCH (fominalec@gmail.com)
+//1.96 13.02.2023
+//Fixed: DS18b20 zeros bug
 //1.95 14.01.2021
 //GPS ANTI ROLLOVER FIX
 //1.94 17.02.2021
@@ -1305,23 +1307,37 @@ String updateDateString()
 
 float getTemperature (boolean bTempFormat)
 {
-  byte TempRawData[2];
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0x44); //send make convert to all devices
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0xBE); //send request to all devices
+  static float fDegrees;
+  static int iterator=0;
+  static byte TempRawData[2];
 
-  TempRawData[0] = ds.read();
-  TempRawData[1] = ds.read();
-  int16_t raw = (TempRawData[1] << 8) | TempRawData[0];
-  if (raw == -1) raw = 0;
-  float celsius = (float)raw / 16.0;
-  float fDegrees;
-  if (!bTempFormat) fDegrees = celsius * 10;
-  else fDegrees = (celsius * 1.8 + 32.0) * 10;
-  //Serial.println(fDegrees);
+  static uint32_t startTime=millis();
+
+  switch (iterator) 
+  {
+    case 0: ds.reset(); break; // 1 ms
+    case 1: ds.write(0xCC); break; //
+    case 2: ds.write(0x44); startTime=millis(); break; // 0-1 ms
+    case 3: if (millis()-startTime < 750) return fDegrees; break;
+    case 4: ds.reset(); break; //1 ms
+    case 5: ds.write(0xCC); break; //
+    case 6: ds.write(0xBE); break; //send request to all devices
+    case 7: TempRawData[0] = ds.read(); break;
+    case 8: TempRawData[1] = ds.read(); break;
+    default:  break;
+  }
+  
+ if (iterator == 9)
+  {
+    int16_t raw = (TempRawData[1] << 8) | TempRawData[0];
+    if (raw == -1) raw = 0;
+    float celsius = (float)raw / 16.0;
+     
+    if (!bTempFormat) fDegrees = celsius * 10;
+    else fDegrees = (celsius * 1.8 + 32.0) * 10;
+  }
+  iterator++;
+  if (iterator==10) iterator=0;
   return fDegrees;
 }
 
