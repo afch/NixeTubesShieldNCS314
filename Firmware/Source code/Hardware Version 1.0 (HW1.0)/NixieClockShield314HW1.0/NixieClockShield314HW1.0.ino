@@ -146,7 +146,7 @@ void setup()
   //setRTCDateTime(23,40,00,25,7,15,1);
   
   Serial.begin(115200);
-  Serial.println("");
+  Serial.println("hello");
   
     if (EEPROM.read(HourFormatEEPROMAddress)!=12) value[hModeValueIndex]=24; else value[hModeValueIndex]=12;
     if (EEPROM.read(RGBLEDsEEPROMAddress)!=0) RGBLedsOn=true; else RGBLedsOn=false;
@@ -195,7 +195,7 @@ void setup()
   //
   digitalWrite(DHVpin, HIGH); // on MAX1771 Driver  Hight Voltage(DHV) 110-220V
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  //doTest();
+  doTest();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   getRTCTime();
   setTime(RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year);
@@ -958,6 +958,3 @@ void checkAlarmTime()
      p=song;
    }
 }
-
-
-
