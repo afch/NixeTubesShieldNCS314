@@ -43,63 +43,8 @@ void loop() {
 }
 
 
-/*void doIndication()
-{
-  digitalWrite(LEpin, LOW);    // allow data input (Transparent mode)
-  unsigned long Var32=0;
-   
-  long digits=stringToDisplay.toInt();
-  
-  //-------- REG 1 ----------------------------------------------- 
-  Var32=0;
- 
-  Var32|=(unsigned long)(SymbolArray[digits%10])<<20; // s2
-  digits=digits/10;
-
-  Var32|=(unsigned long)(SymbolArray[digits%10])<<10; //s1
-  digits=digits/10;
-
-  Var32|=(unsigned long) (SymbolArray[digits%10]); //m2
-  digits=digits/10;
-
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
-
-  //digitalWrite(LEpin, LOW);   
- //-------------------------------------------------------------------------
-
- //-------- REG 0 ----------------------------------------------- 
-  Var32=0;
-  
-  Var32|=(unsigned long)(SymbolArray[digits%10])<<20; // m1
-  digits=digits/10;
-
-  Var32|= (unsigned long)(SymbolArray[digits%10])<<10; //h2
-  digits=digits/10;
-
-  Var32|= (unsigned long)SymbolArray[digits%10]; //h1
-  digits=digits/10;
-
-  //digitalWrite(LEpin, HIGH);
-  
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
-
-  digitalWrite(LEpin, HIGH);     // latching data 
-}*/
-
 void doIndication()
 {
-  
-  /*static unsigned long lastTimeInterval1Started;
-  if ((micros()-lastTimeInterval1Started)<fpsLimit) return;
-  //if (menuPosition==TimeIndex) doDotBlink();
-  lastTimeInterval1Started=micros();*/
-    
   unsigned long Var32=0;
   unsigned long New32_L=0;
   unsigned long New32_H=0;
