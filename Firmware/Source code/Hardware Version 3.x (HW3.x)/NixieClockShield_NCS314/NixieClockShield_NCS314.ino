@@ -1,8 +1,10 @@
-const String FirmwareVersion = "019700";
+const String FirmwareVersion = "019800"; //dev!!!!
 //#define HardwareVersion "NCS314 for HW 3.x" 
 const char HardwareVersion[] PROGMEM = {"NCS314 for HW 3.x"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 3.x by GRA & AFCH (fominalec@gmail.com)
+//1.98 07.09.2023
+//Night Mode (start)
 //1.97 05.09.2023
 //Added: RV-3028-C7 RTC Support
 //1.96 13.02.2023
@@ -216,6 +218,8 @@ bool TempPresent = false;
 #define CELSIUS 0
 #define FAHRENHEIT 1
 
+bool NightMode = false;
+
 String stringToDisplay = "000000"; // Conten of this string will be displayed on tubes (must be 6 chars length)
 int menuPosition = 0; 
 // 0 - time
@@ -238,42 +242,45 @@ uint8_t RTC_Address=DS1307_ADDRESS;
 byte zero = 0x00; //workaround for issue #527
 int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_of_week;
 
-#define TimeIndex        0
-#define DateIndex        1
-#define AlarmIndex       2
-#define hModeIndex       3
-#define TemperatureIndex 4
-#define TimeZoneIndex    5
-#define TimeHoursIndex   6
-#define TimeMintuesIndex 7
-#define TimeSecondsIndex 8
-#define DateFormatIndex  9 
-#define DateDayIndex     10
-#define DateMonthIndex   11
-#define DateYearIndex    12
-#define AlarmHourIndex   13
-#define AlarmMinuteIndex 14
-#define AlarmSecondIndex 15
-#define Alarm01          16
-#define hModeValueIndex  17
-#define DegreesFormatIndex 18
-#define HoursOffsetIndex 19
+#define TimeIndex           0
+#define DateIndex           1
+#define AlarmIndex          2
+#define hModeIndex          3
+#define TemperatureIndex    4
+#define TimeZoneIndex       5
+#define NightModeIndex      6
+#define TimeHoursIndex      7
+#define TimeMintuesIndex    8
+#define TimeSecondsIndex    9
+#define DateFormatIndex     10 
+#define DateDayIndex        11
+#define DateMonthIndex      12
+#define DateYearIndex       13
+#define AlarmHourIndex      14
+#define AlarmMinuteIndex    15
+#define AlarmSecondIndex    16
+#define Alarm01             17
+#define hModeValueIndex     18
+#define DegreesFormatIndex  19
+#define HoursOffsetIndex    20
+#define OffHourIndex        21
+#define OnHourIndex         22
 
 #define FirstParent      TimeIndex
-#define LastParent       TimeZoneIndex
-#define SettingsCount    (HoursOffsetIndex+1)
+#define LastParent       NightModeIndex
+#define SettingsCount    (OnHourIndex+1)
 #define NoParent         0
 #define NoChild          0
 
-//-------------------------------0--------1--------2-------3--------4--------5--------6--------7--------8--------9----------10-------11---------12---------13-------14-------15---------16---------17--------18----------19
-//                     names:  Time,   Date,   Alarm,   12/24, Temperature,TimeZone,hours,   mintues, seconds, DateFormat, day,    month,   year,      hour,   minute,   second alarm01  hour_format Deg.FormIndex HoursOffset
-//                               1        1        1       1        1        1        1        1        1        1          1        1          1          1        1        1        1            1         1        1
-int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent,NoParent,NoParent,1,       1,       1,       2,         2,       2,         2,         3,       3,       3,       3,       4,           5,        6};
-int firstChild[SettingsCount] = {6,       9,       13,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int lastChild[SettingsCount] = { 8,      12,       16,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,  EU_DateFormat,  0,       0,         0,         0,       0,       0,       0,       24,          0,        2};
-int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59, US_DateFormat,  31,      12,        99,       23,      59,      59,       1,       24,     FAHRENHEIT,    14};
-int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00, EU_DateFormat,  1,       1,         00,       00,      00,      00,       0,       12,      CELSIUS,     -12};
+//-------------------------------------0--------------1----------------2--------------3-------------4-------------------5-----------------6---------7-------------8-------------9----------10-----------11----------12------------13------------14----------15--------------16------------17------------18----------------19---------------20----------------21------------22-------------
+//                           names:  Time,          Date,           Alarm,           12/24,    Temperature,          TimeZone,       NightMode,   hours,      mintues,       seconds, DateFormat,      day,       month,         year,        hour,       minute,        second,      alarm01,     hour_format,       Deg.Form,       HoursOffset,         OffHour,        OnHour 
+//                                     1              1                1              1             1                   1                 1         1             1             1          1            1           1             1             1           1               1             1             1                 1                1                 1              1
+int parent[SettingsCount] = {      NoParent,      NoParent,       NoParent,       NoParent,      NoParent,          NoParent,         NoParent, TimeIndex+1, TimeIndex+1, TimeIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, AlarmIndex+1,  AlarmIndex+1, AlarmIndex+1, AlarmIndex+1, hModeIndex+1, TemperatureIndex+1, TimeZoneIndex+1, NightModeIndex+1, NightModeIndex+1  }; // +1 !!!!!!!!!
+int firstChild[SettingsCount] = {TimeHoursIndex, DateFormatIndex, AlarmHourIndex, hModeIndex, DegreesFormatIndex, HoursOffsetIndex, OffHourIndex,   0,            0,            0,      NoChild,        0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int lastChild[SettingsCount] = {TimeSecondsIndex, DateYearIndex,     Alarm01,     hModeIndex, DegreesFormatIndex, HoursOffsetIndex, OnHourIndex,    0,            0,            0,      NoChild,        0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int value[SettingsCount] = {           0,             0,              0,              0,            0,                  0,                0,        0,            0,            0,    EU_DateFormat,    0,          0,            0,            0,          0,              0,            0,            24,               0,               2,                22,             8             };
+int maxValue[SettingsCount] = {        0,             0,              0,              0,            0,                  0,                0,        23,           59,           59,   US_DateFormat,    31,         12,           99,           23,         59,             59,           1,            24,           FAHRENHEIT,          14,               23,             23            };
+int minValue[SettingsCount] = {        0,             0,              0,              12,           0,                  0,                0,        00,           00,           00,   EU_DateFormat,    1,          1,            00,           00,         00,             00,           0,            12,             CELSIUS,          -12,               0,              0             };
 int blinkPattern[SettingsCount] = {  
   B00000000, //0
   B00000000, //1
@@ -281,20 +288,23 @@ int blinkPattern[SettingsCount] = {
   B00000000, //3
   B00000000, //4
   B00000000, //5
-  B00000011, //6
-  B00001100, //7
-  B00110000, //8
-  B00111111, //9
-  B00000011, //10
-  B00001100, //11
-  B00110000, //12
-  B00000011, //13
-  B00001100, //14
-  B00110000, //15
-  B11000000, //16
-  B00001100, //17
-  B00111111, //18
-  B00000011, //19
+  B00000000, //6
+  B00000011, //7
+  B00001100, //8
+  B00110000, //9
+  B00111111, //10
+  B00000011, //11
+  B00001100, //12
+  B00110000, //13
+  B00000011, //14
+  B00001100, //15
+  B00110000, //16
+  B11000000, //17
+  B00001100, //18
+  B00111111, //19
+  B00000011, //20
+  B00000011, //21
+  B00001100, //22
 };
 
 bool editMode = false;
@@ -431,7 +441,7 @@ void setup()
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  doTest();
+  //doTest();
   RTC_Test();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if (LEDsLock == 1)
@@ -578,6 +588,7 @@ void loop() {
     blinkMask = blinkPattern[menuPosition];
     if ((parent[menuPosition - 1] != 0) and (lastChild[parent[menuPosition - 1] - 1] == (menuPosition - 1))) //exit from edit mode
     {
+      Serial.println(F("Exit from edit mode")); //del this !!!!!!!!!!!!!!
       if ((parent[menuPosition - 1] - 1 == 1) && (!isValidDate()))
       {
         menuPosition = DateDayIndex;
@@ -611,9 +622,9 @@ void loop() {
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
       return;
     } //end exit from edit mode
-    /*Serial.print("menu pos=");
+    Serial.print(F("menuPosition="));
     Serial.println(menuPosition);
-    Serial.print("DateFormat");
+    /*Serial.print("DateFormat");
     Serial.println(value[DateFormatIndex]);*/
     if ((menuPosition != HoursOffsetIndex) &&
         (menuPosition != DateFormatIndex) &&
@@ -818,6 +829,11 @@ void loop() {
      case DateYearIndex:
       if (value[DateFormatIndex] == EU_DateFormat) stringToDisplay=PreZero(value[DateDayIndex])+PreZero(value[DateMonthIndex])+PreZero(value[DateYearIndex]);
         else stringToDisplay=PreZero(value[DateMonthIndex])+PreZero(value[DateDayIndex])+PreZero(value[DateYearIndex]);
+     break;
+     case NightModeIndex:
+     case OffHourIndex:
+     case OnHourIndex:
+      stringToDisplay = PreZero(value[OffHourIndex]) + PreZero(value[OnHourIndex]) + "01";
      break;
   }
 //  IRresults.value=0;
