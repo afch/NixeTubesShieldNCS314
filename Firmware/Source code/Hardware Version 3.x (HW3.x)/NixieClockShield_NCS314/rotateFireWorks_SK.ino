@@ -87,19 +87,20 @@ void setLEDsFromEEPROM()
 
   for(int i=0;i<NUMPIXELS;i++)
   {
-    pixels.setPixelColor(i, pixels.Color(R, G, B)); 
+    if(RGBLedsOn) pixels.setPixelColor(i, pixels.Color(R, G, B)); 
+      else pixels.setPixelColor(i, pixels.Color(0, 0, 0));
   }
   pixels.show();
   /*analogWrite(RedLedPin, EEPROM.read(LEDsRedValueEEPROMAddress));
   analogWrite(GreenLedPin, EEPROM.read(LEDsGreenValueEEPROMAddress));
   analogWrite(BlueLedPin, EEPROM.read(LEDsBlueValueEEPROMAddress));*/
     // ********
-  Serial.println(F("Readed from EEPROM"));
+  /*Serial.println(F("Readed from EEPROM"));
   Serial.print(F("RED="));
   Serial.println(R);
   Serial.print(F("GREEN="));
   Serial.println(G);
   Serial.print(F("Blue="));
-  Serial.println(B);
+  Serial.println(B);*/
   // ********
 }

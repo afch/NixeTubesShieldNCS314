@@ -219,6 +219,7 @@ bool TempPresent = false;
 #define FAHRENHEIT 1
 
 bool NightMode = false;
+bool RGBLedsStateBeforeNightMode = false;
 
 String stringToDisplay = "000000"; // Conten of this string will be displayed on tubes (must be 6 chars length)
 int menuPosition = 0; 
@@ -327,6 +328,8 @@ bool RGBLedsOn = true;
 #define DegreesFormatEEPROMAddress 11
 #define HoursOffsetEEPROMAddress 12
 #define DateFormatEEPROMAddress 13
+#define OffHourEEPROMAddress 14
+#define OnHourEEPROMAddress 15
 
 //buttons pins declarations
 ClickButton setButton(pinSet, LOW, CLICKBTN_PULLUP);
@@ -401,8 +404,9 @@ void setup()
   if (EEPROM.read(DegreesFormatEEPROMAddress) == 255) value[DegreesFormatIndex] = CELSIUS; else value[DegreesFormatIndex] = EEPROM.read(DegreesFormatEEPROMAddress);
   if (EEPROM.read(HoursOffsetEEPROMAddress) == 255) value[HoursOffsetIndex] = value[HoursOffsetIndex]; else value[HoursOffsetIndex] = EEPROM.read(HoursOffsetEEPROMAddress) + minValue[HoursOffsetIndex];
   if (EEPROM.read(DateFormatEEPROMAddress) == 255) value[DateFormatIndex] = value[DateFormatIndex]; else value[DateFormatIndex] = EEPROM.read(DateFormatEEPROMAddress);
+  if (EEPROM.read(OffHourEEPROMAddress) != 255) value[OffHourIndex] = EEPROM.read(OffHourEEPROMAddress);
+  if (EEPROM.read(OnHourEEPROMAddress) != 255) value[OnHourIndex] = EEPROM.read(OnHourEEPROMAddress);
   
-
   //Serial.print(F("led lock="));
   //Serial.println(LEDsLock);
 
@@ -485,8 +489,9 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 /***************************************************************************************************************
   MAIN Programm
 ***************************************************************************************************************/
-void loop() {
-
+void loop() 
+{
+  CheckNightMode();
   if (((millis() % 10000) == 0) && (RTC_present)) //synchronize with RTC every 10 seconds
   {
     getRTCTime();
@@ -571,6 +576,11 @@ void loop() {
     p = 0; //shut off music )))
     tone1.play(1000, 100);
     enteringEditModeTime = millis();
+    if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     /*if (value[DateFormatIndex] == US_DateFormat)
     {
       //if (menuPosition == )
@@ -588,7 +598,7 @@ void loop() {
     blinkMask = blinkPattern[menuPosition];
     if ((parent[menuPosition - 1] != 0) and (lastChild[parent[menuPosition - 1] - 1] == (menuPosition - 1))) //exit from edit mode
     {
-      Serial.println(F("Exit from edit mode")); //del this !!!!!!!!!!!!!!
+      //Serial.println(F("Exit from edit mode")); //del this !!!!!!!!!!!!!!
       if ((parent[menuPosition - 1] - 1 == 1) && (!isValidDate()))
       {
         menuPosition = DateDayIndex;
@@ -599,10 +609,10 @@ void loop() {
       if (menuPosition == TimeIndex) setTime(value[TimeHoursIndex], value[TimeMintuesIndex], value[TimeSecondsIndex], day(), month(), year());
       if (menuPosition == DateIndex) 
       {
-        Serial.print(F("Day:"));
+        /*Serial.print(F("Day:"));
         Serial.println(value[DateDayIndex]);
         Serial.print(F("Month:"));
-        Serial.println(value[DateMonthIndex]);
+        Serial.println(value[DateMonthIndex]);*/
         setTime(hour(), minute(), second(), value[DateDayIndex], value[DateMonthIndex], 2000 + value[DateYearIndex]);
         EEPROM.write(DateFormatEEPROMAddress, value[DateFormatIndex]);
       }
@@ -618,12 +628,17 @@ void loop() {
         EEPROM.write(DegreesFormatEEPROMAddress, value[DegreesFormatIndex]);
       }
       if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
+      if (menuPosition == NightModeIndex) 
+      {
+        EEPROM.write(OffHourEEPROMAddress, value[OffHourIndex]);
+        EEPROM.write(OnHourEEPROMAddress, value[OnHourIndex]);
+      }
       //if (menuPosition == hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
       return;
     } //end exit from edit mode
-    Serial.print(F("menuPosition="));
-    Serial.println(menuPosition);
+    //Serial.print(F("menuPosition="));
+    //Serial.println(menuPosition);
     /*Serial.print("DateFormat");
     Serial.println(value[DateFormatIndex]);*/
     if ((menuPosition != HoursOffsetIndex) &&
@@ -632,6 +647,7 @@ void loop() {
   }
   if ((setButton.clicks < 0) || (ModeButtonState == -1)) //long click
   {
+    ExitFromNightMode();
     tone1.play(1000, 100);
     if (!editMode)
     {
@@ -672,6 +688,11 @@ void loop() {
     modeChangedByUser = true;
     p = 0; //shut off music )))
     tone1.play(1000, 100);
+     if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     incrementValue();
     if (!editMode)
     {
@@ -700,6 +721,11 @@ void loop() {
     modeChangedByUser = true;
     p = 0; //shut off music )))
     tone1.play(1000, 100);
+     if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     dicrementValue();
     if (!editMode)
     {
@@ -735,18 +761,20 @@ void loop() {
   {
     if ((upButton.clicks < 0) || (UpButtonState == -1))
     {
+      ExitFromNightMode();
       tone1.play(1000, 100);
       RGBLedsOn = true;
       EEPROM.write(RGBLEDsEEPROMAddress, 1);
-      Serial.println(F("RGB=on"));
+      //Serial.println(F("RGB=on"));
       setLEDsFromEEPROM();
     }
     if ((downButton.clicks < 0) || (DownButtonState == -1))
     {
+      ExitFromNightMode();
       tone1.play(1000, 100);
       RGBLedsOn = false;
       EEPROM.write(RGBLEDsEEPROMAddress, 0);
-      Serial.println(F("RGB=off"));
+      //Serial.println(F("RGB=off"));
     }
   }
 
@@ -1216,6 +1244,7 @@ void checkAlarmTime()
   if (Alarm1SecondBlock == true) return;
   if ((hour() == value[AlarmHourIndex]) && (minute() == value[AlarmMinuteIndex]) && (second() == value[AlarmSecondIndex]))
   {
+    ExitFromNightMode();
     lastTimeAlarmTriggired = millis();
     Alarm1SecondBlock = true;
     Serial.println(F("Wake up, Neo!"));
@@ -1653,4 +1682,43 @@ void RTC_Test()
   Wire.write(0x0E);
   Wire.write(0x00);
   Wire.endTransmission(); //reset RTC
+}
+
+void CheckNightMode()
+{
+  static uint8_t prevHour = hour();
+
+  if (editMode == true) return;
+
+  if (prevHour != hour()) 
+  {
+    prevHour = hour();
+    if (hour() == value[OffHourIndex]) 
+    {
+      NightMode = true;
+      RGBLedsStateBeforeNightMode = RGBLedsOn;
+      //Serial.print(F("RGBLedsOn="));
+      //Serial.print(RGBLedsOn);
+      RGBLedsOn = false;
+      //Serial.println(F("NightMode ON"));
+    }
+    if (hour() == value[OnHourIndex]) 
+    {
+      //NightMode = false;
+      //RGBLedsOn = RGBLedsStateBeforeNightMode;
+      ExitFromNightMode();
+    }
+  }
+}
+
+void ExitFromNightMode()
+{
+  if (NightMode)
+  {
+    NightMode = false;
+    RGBLedsOn = RGBLedsStateBeforeNightMode;
+    //Serial.print(F("RGBLedsOn="));
+    //Serial.print(RGBLedsOn);
+    setLEDsFromEEPROM();
+  }
 }
