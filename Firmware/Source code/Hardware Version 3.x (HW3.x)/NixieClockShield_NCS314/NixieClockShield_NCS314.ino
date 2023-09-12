@@ -1,10 +1,10 @@
-const String FirmwareVersion = "019800"; //dev!!!!
+const String FirmwareVersion = "019800"; 
 //#define HardwareVersion "NCS314 for HW 3.x" 
 const char HardwareVersion[] PROGMEM = {"NCS314 for HW 3.x"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 3.x by GRA & AFCH (fominalec@gmail.com)
 //1.98 07.09.2023
-//Night Mode (start)
+//Night Mode
 //1.97 05.09.2023
 //Added: RV-3028-C7 RTC Support
 //1.96 13.02.2023
@@ -273,15 +273,15 @@ int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_o
 #define NoParent         0
 #define NoChild          0
 
-//-------------------------------------0--------------1----------------2--------------3-------------4-------------------5-----------------6---------7-------------8-------------9----------10-----------11----------12------------13------------14----------15--------------16------------17------------18----------------19---------------20----------------21------------22-------------
-//                           names:  Time,          Date,           Alarm,           12/24,    Temperature,          TimeZone,       NightMode,   hours,      mintues,       seconds, DateFormat,      day,       month,         year,        hour,       minute,        second,      alarm01,     hour_format,       Deg.Form,       HoursOffset,         OffHour,        OnHour 
-//                                     1              1                1              1             1                   1                 1         1             1             1          1            1           1             1             1           1               1             1             1                 1                1                 1              1
-int parent[SettingsCount] = {      NoParent,      NoParent,       NoParent,       NoParent,      NoParent,          NoParent,         NoParent, TimeIndex+1, TimeIndex+1, TimeIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, AlarmIndex+1,  AlarmIndex+1, AlarmIndex+1, AlarmIndex+1, hModeIndex+1, TemperatureIndex+1, TimeZoneIndex+1, NightModeIndex+1, NightModeIndex+1  }; // +1 !!!!!!!!!
-int firstChild[SettingsCount] = {TimeHoursIndex, DateFormatIndex, AlarmHourIndex, hModeIndex, DegreesFormatIndex, HoursOffsetIndex, OffHourIndex,   0,            0,            0,      NoChild,        0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
-int lastChild[SettingsCount] = {TimeSecondsIndex, DateYearIndex,     Alarm01,     hModeIndex, DegreesFormatIndex, HoursOffsetIndex, OnHourIndex,    0,            0,            0,      NoChild,        0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
-int value[SettingsCount] = {           0,             0,              0,              0,            0,                  0,                0,        0,            0,            0,    EU_DateFormat,    0,          0,            0,            0,          0,              0,            0,            24,               0,               2,                22,             8             };
-int maxValue[SettingsCount] = {        0,             0,              0,              0,            0,                  0,                0,        23,           59,           59,   US_DateFormat,    31,         12,           99,           23,         59,             59,           1,            24,           FAHRENHEIT,          14,               23,             23            };
-int minValue[SettingsCount] = {        0,             0,              0,              12,           0,                  0,                0,        00,           00,           00,   EU_DateFormat,    1,          1,            00,           00,         00,             00,           0,            12,             CELSIUS,          -12,               0,              0             };
+//-------------------------------------0--------------1----------------2--------------3-----------------4-------------------5-----------------6-----------7-------------8-------------9-----------10------------11----------12------------13------------14----------15--------------16------------17------------18----------------19---------------20----------------21------------22-------------
+//                           names:  Time,          Date,           Alarm,           12/24,        Temperature,          TimeZone,       NightMode,     hours,       mintues,      seconds,   DateFormat,      day,       month,         year,        hour,       minute,        second,      alarm01,     hour_format,       Deg.Form,       HoursOffset,         OffHour,        OnHour 
+//                                     1              1                1              1                 1                   1                 1           1             1             1           1             1           1             1             1           1               1             1             1                 1                1                 1              1
+int parent[SettingsCount] = {      NoParent,      NoParent,       NoParent,       NoParent,          NoParent,          NoParent,         NoParent, TimeIndex+1, TimeIndex+1, TimeIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, AlarmIndex+1,  AlarmIndex+1, AlarmIndex+1, AlarmIndex+1, hModeIndex+1, TemperatureIndex+1, TimeZoneIndex+1, NightModeIndex+1, NightModeIndex+1  }; // +1 !!!!!!!!!
+int firstChild[SettingsCount] = {TimeHoursIndex, DateFormatIndex, AlarmHourIndex, hModeValueIndex, DegreesFormatIndex, HoursOffsetIndex, OffHourIndex,    0,            0,            0,      NoChild,          0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int lastChild[SettingsCount] = {TimeSecondsIndex, DateYearIndex,     Alarm01,     hModeValueIndex, DegreesFormatIndex, HoursOffsetIndex, OnHourIndex,     0,            0,            0,      NoChild,          0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int value[SettingsCount] = {           0,             0,              0,              0,                0,                  0,                0,          0,            0,            0,    EU_DateFormat,      0,          0,            0,            0,          0,              0,            0,            24,               0,               2,                22,             8             };
+int maxValue[SettingsCount] = {        0,             0,              0,              24,               0,                  0,                0,          23,           59,           59,   US_DateFormat,      31,         12,           99,           23,         59,             59,           1,            24,           FAHRENHEIT,          14,               23,             23            };
+int minValue[SettingsCount] = {        0,             0,              0,              12,               0,                  0,                0,          00,           00,           00,   EU_DateFormat,      1,          1,            00,           00,         00,             00,           0,            12,             CELSIUS,          -12,               0,              0             };
 int blinkPattern[SettingsCount] = {  
   B00000000, //0
   B00000000, //1
@@ -445,7 +445,7 @@ void setup()
   downButton.longClickTime  = 2000; // time until "held-down clicks" register
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  //doTest();
+  doTest();
   RTC_Test();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if (LEDsLock == 1)
@@ -862,6 +862,7 @@ void loop()
      case OffHourIndex:
      case OnHourIndex:
       stringToDisplay = PreZero(value[OffHourIndex]) + PreZero(value[OnHourIndex]) + "01";
+      dotPattern = B00000000; //turn off all dots
      break;
   }
 //  IRresults.value=0;
@@ -1469,7 +1470,7 @@ bool GPS_Parse_DateTime()
       if (CommasCounter == 1)
         if (GPS_Package[i + 1] != 'A') 
         {
-          Serial.println("Validation failed");
+          Serial.println(F("Validation failed"));
           return false;
         }
       if (CommasCounter == 8)

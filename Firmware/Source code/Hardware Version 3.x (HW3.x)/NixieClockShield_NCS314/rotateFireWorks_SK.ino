@@ -3,7 +3,7 @@
 #define PIN            6
 #define NUMPIXELS      8
 #define LEDsSpeed      10
-const int LEDsDelay=40;
+const int LEDsDelay=80;
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
