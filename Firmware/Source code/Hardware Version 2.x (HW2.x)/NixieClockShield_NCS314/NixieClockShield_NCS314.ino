@@ -1,7 +1,9 @@
-const String FirmwareVersion = "019700";
+const String FirmwareVersion = "019800";
 const char HardwareVersion[] PROGMEM = {"NCS314 for HW 2.x HV5122 or HV5222"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.98 07.09.2023
+//Night Mode(start)
 //1.97 05.09.2023
 //Added: RV-3028-C7 RTC support
 //1.96 13.02.2023
@@ -227,6 +229,9 @@ bool TempPresent = false;
 #define CELSIUS 0
 #define FAHRENHEIT 1
 
+bool NightMode = false;
+bool RGBLedsStateBeforeNightMode = false;
+
 String stringToDisplay = "000000"; // Conten of this string will be displayed on tubes (must be 6 chars length)
 int menuPosition = 0;
 // 0 - time
@@ -249,42 +254,45 @@ uint8_t RTC_Address=DS1307_ADDRESS;
 byte zero = 0x00; //workaround for issue #527
 int RTC_hours, RTC_minutes, RTC_seconds, RTC_day, RTC_month, RTC_year, RTC_day_of_week;
 
-#define TimeIndex        0
-#define DateIndex        1
-#define AlarmIndex       2
-#define hModeIndex       3
-#define TemperatureIndex 4
-#define TimeZoneIndex    5
-#define TimeHoursIndex   6
-#define TimeMintuesIndex 7
-#define TimeSecondsIndex 8
-#define DateFormatIndex  9
-#define DateDayIndex     10
-#define DateMonthIndex   11
-#define DateYearIndex    12
-#define AlarmHourIndex   13
-#define AlarmMinuteIndex 14
-#define AlarmSecondIndex 15
-#define Alarm01          16
-#define hModeValueIndex  17
-#define DegreesFormatIndex 18
-#define HoursOffsetIndex 19
+#define TimeIndex           0
+#define DateIndex           1
+#define AlarmIndex          2
+#define hModeIndex          3
+#define TemperatureIndex    4
+#define TimeZoneIndex       5
+#define NightModeIndex      6
+#define TimeHoursIndex      7
+#define TimeMintuesIndex    8
+#define TimeSecondsIndex    9
+#define DateFormatIndex     10 
+#define DateDayIndex        11
+#define DateMonthIndex      12
+#define DateYearIndex       13
+#define AlarmHourIndex      14
+#define AlarmMinuteIndex    15
+#define AlarmSecondIndex    16
+#define Alarm01             17
+#define hModeValueIndex     18
+#define DegreesFormatIndex  19
+#define HoursOffsetIndex    20
+#define OffHourIndex        21
+#define OnHourIndex         22
 
 #define FirstParent      TimeIndex
-#define LastParent       TimeZoneIndex
-#define SettingsCount    (HoursOffsetIndex+1)
+#define LastParent       NightModeIndex
+#define SettingsCount    (OnHourIndex+1)
 #define NoParent         0
 #define NoChild          0
 
-//-------------------------------0--------1--------2-------3--------4--------5--------6--------7--------8--------9----------10-------11---------12---------13-------14-------15---------16---------17--------18----------19
-//                     names:  Time,   Date,   Alarm,   12/24, Temperature,TimeZone,hours,   mintues, seconds, DateFormat, day,    month,   year,      hour,   minute,   second alarm01  hour_format Deg.FormIndex HoursOffset
-//                               1        1        1       1        1        1        1        1        1        1          1        1          1          1        1        1        1            1         1        1
-int parent[SettingsCount] = {NoParent, NoParent, NoParent, NoParent, NoParent, NoParent, 1,       1,       1,       2,         2,       2,         2,         3,       3,       3,       3,       4,           5,        6};
-int firstChild[SettingsCount] = {6,       9,       13,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int lastChild[SettingsCount] = { 8,      12,       16,     17,      18,      19,      0,       0,       0,    NoChild,      0,       0,         0,         0,       0,       0,       0,       0,           0,        0};
-int value[SettingsCount] = {     0,       0,       0,      0,       0,       0,       0,       0,       0,  EU_DateFormat,  0,       0,         0,         0,       0,       0,       0,       24,          0,        2};
-int maxValue[SettingsCount] = {  0,       0,       0,      0,       0,       0,       23,      59,      59, US_DateFormat,  31,      12,        99,       23,      59,      59,       1,       24,     FAHRENHEIT,    14};
-int minValue[SettingsCount] = {  0,       0,       0,      12,      0,       0,       00,      00,      00, EU_DateFormat,  1,       1,         00,       00,      00,      00,       0,       12,      CELSIUS,     -12};
+//-------------------------------------0--------------1----------------2--------------3-----------------4-------------------5-----------------6-----------7-------------8-------------9-----------10------------11----------12------------13------------14----------15--------------16------------17------------18----------------19---------------20----------------21------------22-------------
+//                           names:  Time,          Date,           Alarm,           12/24,        Temperature,          TimeZone,       NightMode,     hours,       mintues,      seconds,   DateFormat,      day,       month,         year,        hour,       minute,        second,      alarm01,     hour_format,       Deg.Form,       HoursOffset,         OffHour,        OnHour 
+//                                     1              1                1              1                 1                   1                 1           1             1             1           1             1           1             1             1           1               1             1             1                 1                1                 1              1
+int parent[SettingsCount] = {      NoParent,      NoParent,       NoParent,       NoParent,          NoParent,          NoParent,         NoParent, TimeIndex+1, TimeIndex+1, TimeIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, DateIndex+1, AlarmIndex+1,  AlarmIndex+1, AlarmIndex+1, AlarmIndex+1, hModeIndex+1, TemperatureIndex+1, TimeZoneIndex+1, NightModeIndex+1, NightModeIndex+1  }; // +1 !!!!!!!!!
+int firstChild[SettingsCount] = {TimeHoursIndex, DateFormatIndex, AlarmHourIndex, hModeValueIndex, DegreesFormatIndex, HoursOffsetIndex, OffHourIndex,    0,            0,            0,      NoChild,          0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int lastChild[SettingsCount] = {TimeSecondsIndex, DateYearIndex,     Alarm01,     hModeValueIndex, DegreesFormatIndex, HoursOffsetIndex, OnHourIndex,     0,            0,            0,      NoChild,          0,          0,            0,            0,          0,              0,            0,            0,                0,               0,              NoChild,       NoChild          };
+int value[SettingsCount] = {           0,             0,              0,              0,                0,                  0,                0,          0,            0,            0,    EU_DateFormat,      0,          0,            0,            0,          0,              0,            0,            24,               0,               2,                22,             8             };
+int maxValue[SettingsCount] = {        0,             0,              0,              24,               0,                  0,                0,          23,           59,           59,   US_DateFormat,      31,         12,           99,           23,         59,             59,           1,            24,           FAHRENHEIT,          14,               23,             23            };
+int minValue[SettingsCount] = {        0,             0,              0,              12,               0,                  0,                0,          00,           00,           00,   EU_DateFormat,      1,          1,            00,           00,         00,             00,           0,            12,             CELSIUS,          -12,               0,              0             };
 int blinkPattern[SettingsCount] = {
   B00000000, //0
   B00000000, //1
@@ -292,20 +300,23 @@ int blinkPattern[SettingsCount] = {
   B00000000, //3
   B00000000, //4
   B00000000, //5
-  B00000011, //6
-  B00001100, //7
-  B00110000, //8
-  B00111111, //9
-  B00000011, //10
-  B00001100, //11
-  B00110000, //12
-  B00000011, //13
-  B00001100, //14
-  B00110000, //15
-  B11000000, //16
-  B00001100, //17
-  B00111111, //18
-  B00000011, //19
+  B00000000, //6
+  B00000011, //7
+  B00001100, //8
+  B00110000, //9
+  B00111111, //10
+  B00000011, //11
+  B00001100, //12
+  B00110000, //13
+  B00000011, //14
+  B00001100, //15
+  B00110000, //16
+  B11000000, //17
+  B00001100, //18
+  B00111111, //19
+  B00000011, //20
+  B00000011, //21
+  B00001100, //22
 };
 
 bool editMode = false;
@@ -317,18 +328,21 @@ bool BlinkUp = false;
 bool BlinkDown = false;
 unsigned long enteringEditModeTime = 0;
 bool RGBLedsOn = true;
-byte RGBLEDsEEPROMAddress = 0;
-byte HourFormatEEPROMAddress = 1;
-byte AlarmTimeEEPROMAddress = 2; //3,4,5
-byte AlarmArmedEEPROMAddress = 6;
-byte LEDsLockEEPROMAddress = 7;
-byte LEDsRedValueEEPROMAddress = 8;
-byte LEDsGreenValueEEPROMAddress = 9;
-byte LEDsBlueValueEEPROMAddress = 10;
-byte DegreesFormatEEPROMAddress = 11;
-byte HoursOffsetEEPROMAddress = 12;
-byte DateFormatEEPROMAddress = 13;
-byte DotsModeEEPROMAddress = 14;
+#define RGBLEDsEEPROMAddress 0
+#define HourFormatEEPROMAddress 1
+#define AlarmTimeEEPROMAddress 2 //3,4,5
+#define AlarmArmedEEPROMAddress 6
+#define LEDsLockEEPROMAddress 7
+#define LEDsRedValueEEPROMAddress 8
+#define LEDsGreenValueEEPROMAddress 9
+#define LEDsBlueValueEEPROMAddress 10
+#define DegreesFormatEEPROMAddress 11
+#define HoursOffsetEEPROMAddress 12
+#define DateFormatEEPROMAddress 13
+#define DotsModeEEPROMAddress 14
+#define OffHourEEPROMAddress 14
+#define OnHourEEPROMAddress 15
+
 #define DOT_MODE_314 0
 //#define DOT_MODE_312 1
 bool DotsMode = DOT_MODE_314;
@@ -411,6 +425,8 @@ void setup()
   if (EEPROM.read(DegreesFormatEEPROMAddress) == 255) value[DegreesFormatIndex] = CELSIUS; else value[DegreesFormatIndex] = EEPROM.read(DegreesFormatEEPROMAddress);
   if (EEPROM.read(HoursOffsetEEPROMAddress) == 255) value[HoursOffsetIndex] = value[HoursOffsetIndex]; else value[HoursOffsetIndex] = EEPROM.read(HoursOffsetEEPROMAddress) + minValue[HoursOffsetIndex];
   if (EEPROM.read(DateFormatEEPROMAddress) == 255) value[DateFormatIndex] = value[DateFormatIndex]; else value[DateFormatIndex] = EEPROM.read(DateFormatEEPROMAddress);
+  if (EEPROM.read(OffHourEEPROMAddress) != 255) value[OffHourIndex] = EEPROM.read(OffHourEEPROMAddress);
+  if (EEPROM.read(OnHourEEPROMAddress) != 255) value[OnHourIndex] = EEPROM.read(OnHourEEPROMAddress);
 
   /* Serial.print(F("led lock="));
     Serial.println(LEDsLock);*/
@@ -508,8 +524,9 @@ unsigned long prevTime4FireWorks = 0; //time of last RGB changed
 /***************************************************************************************************************
   MAIN Programm
 ***************************************************************************************************************/
-void loop() {
-
+void loop() 
+{
+  CheckNightMode();
   if (((millis() % 10000) == 0) && (RTC_present)) //synchronize with RTC every 10 seconds
   {
     getRTCTime();
@@ -594,6 +611,11 @@ void loop() {
     modeChangedByUser = true;
     p = 0; //shut off music )))
     tone1.play(1000, 100);
+    if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     enteringEditModeTime = millis();
     /*if (value[DateFormatIndex] == US_DateFormat)
       {
@@ -642,6 +664,11 @@ void loop() {
       }
       if (menuPosition == TimeZoneIndex) EEPROM.write(HoursOffsetEEPROMAddress, value[HoursOffsetIndex] - minValue[HoursOffsetIndex]);
       //if (menuPosition == hModeIndex) EEPROM.write(HourFormatEEPROMAddress, value[hModeValueIndex]);
+      if (menuPosition == NightModeIndex) 
+      {
+        EEPROM.write(OffHourEEPROMAddress, value[OffHourIndex]);
+        EEPROM.write(OnHourEEPROMAddress, value[OnHourIndex]);
+      }
       setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
       return;
     } //end exit from edit mode
@@ -655,6 +682,7 @@ void loop() {
   }
   if ((setButton.clicks < 0) || (ModeButtonState == -1)) //long click
   {
+    ExitFromNightMode();
     tone1.play(1000, 100);
     if (!editMode)
     {
@@ -695,6 +723,11 @@ void loop() {
     modeChangedByUser = true;
     p = 0; //shut off music )))
     tone1.play(1000, 100);
+    if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     incrementValue();
     if (!editMode)
     {
@@ -723,6 +756,11 @@ void loop() {
     modeChangedByUser = true;
     p = 0; //shut off music )))
     tone1.play(1000, 100);
+    if (NightMode) 
+    {
+      ExitFromNightMode();
+      return;
+    }
     dicrementValue();
     if (!editMode)
     {
@@ -853,6 +891,12 @@ void loop() {
       if (value[DateFormatIndex] == EU_DateFormat) stringToDisplay = PreZero(value[DateDayIndex]) + PreZero(value[DateMonthIndex]) + PreZero(value[DateYearIndex]);
       else stringToDisplay = PreZero(value[DateMonthIndex]) + PreZero(value[DateDayIndex]) + PreZero(value[DateYearIndex]);
       break;
+    case NightModeIndex:
+    case OffHourIndex:
+    case OnHourIndex:
+      stringToDisplay = PreZero(value[OffHourIndex]) + PreZero(value[OnHourIndex]) + "01";
+      dotPattern = B00000000; //turn off all dots
+     break;
   }
   //  IRresults.value=0;
 }
@@ -1242,6 +1286,7 @@ void checkAlarmTime()
   if (Alarm1SecondBlock == true) return;
   if ((hour() == value[AlarmHourIndex]) && (minute() == value[AlarmMinuteIndex]) && (second() == value[AlarmSecondIndex]))
   {
+    ExitFromNightMode();
     lastTimeAlarmTriggired = millis();
     Alarm1SecondBlock = true;
     Serial.println(F("Wake up, Neo!"));
@@ -1487,6 +1532,45 @@ void RTC_Test()
   Wire.write(0x0E);
   Wire.write(0x00);
   Wire.endTransmission(); //reset RTC
+}
+
+void CheckNightMode()
+{
+  static uint8_t prevHour = hour();
+
+  if (editMode == true) return;
+
+  if (prevHour != hour()) 
+  {
+    prevHour = hour();
+    if (hour() == value[OffHourIndex]) 
+    {
+      NightMode = true;
+      RGBLedsStateBeforeNightMode = RGBLedsOn;
+      //Serial.print(F("RGBLedsOn="));
+      //Serial.print(RGBLedsOn);
+      RGBLedsOn = false;
+      //Serial.println(F("NightMode ON"));
+    }
+    if (hour() == value[OnHourIndex]) 
+    {
+      //NightMode = false;
+      //RGBLedsOn = RGBLedsStateBeforeNightMode;
+      ExitFromNightMode();
+    }
+  }
+}
+
+void ExitFromNightMode()
+{
+  if (NightMode)
+  {
+    NightMode = false;
+    RGBLedsOn = RGBLedsStateBeforeNightMode;
+    //Serial.print(F("RGBLedsOn="));
+    //Serial.print(RGBLedsOn);
+    setLEDsFromEEPROM();
+  }
 }
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
