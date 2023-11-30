@@ -20,6 +20,22 @@ void SPISetup()
     else SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE2));
 }
 
+void TurnOffAllTubes()
+{
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+  SPI.transfer(0);
+
+  digitalWrite(LEpin, HIGH); //<<-- это правильно H -> L
+  digitalWrite(LEpin, LOW); // <<-- это правильно H -> L
+}
+
 void doIndication()
 {
   
@@ -27,6 +43,8 @@ void doIndication()
   if ((micros()-lastTimeInterval1Started)<fpsLimit) return;
   //if (menuPosition==TimeIndex) doDotBlink();
   lastTimeInterval1Started=micros();
+
+  if (NightMode) {TurnOffAllTubes(); return;}
     
   unsigned long Var32=0;
   
