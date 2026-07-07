@@ -1,0 +1,8 @@
+v.1.90
+Fixed GPS Time Zone issue.
+
+Changes was made in "Time" library, located at "C:\Users\[USER_NAME]\Documents\Arduino\libraries\Time"
+
+
+***********IMPORTANT**********************
+So, to fix GPS Time Zone, replace Time.cpp file located at "C:\Users\[USER_NAME]\Documents\Arduino\libraries\Time\Time.cpp" from this repository: "Libraries\Time\Time.cpp"
